@@ -15,6 +15,8 @@ export class InputManager {
   public isPotionRequested = false;
   public isInventoryRequested = false;
   public isPauseRequested = false;
+  public isLevelUpRequested = false;
+  public isMapRequested = false;
 
   private activeKeys = new Set<string>();
   private raycaster = new THREE.Raycaster();
@@ -40,16 +42,20 @@ export class InputManager {
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) {
         e.preventDefault();
       }
+      if (e.code === 'Space') this.isAttackPressed = true;
       if (e.code === 'KeyQ' || e.code === 'Digit1') this.isSkill1Pressed = true;
       if (e.code === 'KeyE' || e.code === 'Digit2') this.isSkill2Pressed = true;
       if (e.code === 'KeyR') this.isPotionRequested = true;
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.isDashPressed = true;
       if (e.code === 'KeyI' || e.code === 'Tab') this.isInventoryRequested = true;
       if (e.code === 'KeyP' || e.code === 'Escape') this.isPauseRequested = true;
+      if (e.code === 'KeyL') this.isLevelUpRequested = true;
+      if (e.code === 'KeyM') this.isMapRequested = true;
     });
 
     window.addEventListener('keyup', (e) => {
       this.activeKeys.delete(e.code);
+      if (e.code === 'Space') this.isAttackPressed = false;
     });
 
     // --- PC Mouse Listeners ---

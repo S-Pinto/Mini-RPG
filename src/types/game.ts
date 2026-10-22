@@ -2,10 +2,33 @@
 
 export type ClassId = 'paladin' | 'wizard' | 'fighter' | 'rogue' | 'cleric';
 
+export type WeaponStyle = 
+  | 'staff_2h' 
+  | 'wand_tome' 
+  | 'mace_shield' 
+  | 'staff_holy' 
+  | 'dual_daggers' 
+  | 'bow' 
+  | 'dual_swords' 
+  | 'greatsword_2h' 
+  | 'sword_shield';
+
+export interface SubclassSkill2 {
+  id: string;
+  name: string;
+  cd: number;
+  desc: string;
+  damageMultiplier: number;
+  icon: string;
+}
+
 export interface SubclassConfig {
   id: string;
   name: string;
   desc: string;
+  weaponStyle: WeaponStyle;
+  weaponName: string;
+  skill2: SubclassSkill2;
   bonusDesc: string;
   statBonus: Partial<CharacterStats>;
   passiveEffect: string;
@@ -21,7 +44,7 @@ export interface CharacterClassConfig {
   lightColor: number;
   subclasses: SubclassConfig[];
   baseStats: CharacterStats;
-  weaponType: 'sword_shield' | 'staff' | 'greatsword' | 'daggers' | 'mace_shield';
+  weaponType: WeaponStyle;
   basicAttackName: string;
   basicAttackDesc: string;
   skill1: {
@@ -32,14 +55,7 @@ export interface CharacterClassConfig {
     damageMultiplier: number;
     icon: string;
   };
-  skill2: {
-    id: string;
-    name: string;
-    cd: number;
-    desc: string;
-    damageMultiplier: number;
-    icon: string;
-  };
+  skill2: SubclassSkill2;
 }
 
 export interface CharacterStats {
@@ -67,6 +83,23 @@ export interface CharacterStats {
 export type ItemSlot = 'weapon' | 'armor' | 'helm' | 'ring' | 'relic';
 export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
+export type WeaponModelType = 
+  | 'axe' 
+  | 'greataxe' 
+  | 'sword' 
+  | 'greatsword' 
+  | 'dual_swords' 
+  | 'dual_daggers' 
+  | 'bow' 
+  | 'staff' 
+  | 'staff_holy' 
+  | 'wand_tome' 
+  | 'mace' 
+  | 'hammer';
+
+export type HelmModelType = 'knight_helm' | 'mage_hat' | 'assassin_hood' | 'crown' | 'horned_helm';
+export type ArmorModelType = 'heavy_plate' | 'leather_tunic' | 'mage_robes' | 'chainmail';
+
 export interface Item {
   id: number;
   name: string;
@@ -78,6 +111,10 @@ export interface Item {
   icon: string;
   goldValue: number;
   isNew?: boolean;
+  weaponStyle?: WeaponStyle;
+  modelType?: WeaponModelType;
+  helmType?: HelmModelType;
+  armorType?: ArmorModelType;
 }
 
 export type EnemyType = 
@@ -128,23 +165,56 @@ export interface ZoneConfig {
   eliteEnemy: EnemyType;
 }
 
+export type FeatRarity = 'common' | 'rare' | 'epic' | 'legendary';
+
 export interface FeatUpgrade {
   id: string;
   name: string;
   dndSource: string;
-  category: 'Combattimento' | 'Magia' | 'Sopravvivenza' | 'Speciale';
+  category: 'Combattimento' | 'Magia' | 'Sopravvivenza' | 'Speciale' | 'Maestria';
   desc: string;
   color: string;
+  rarity?: FeatRarity;
+  icon?: string;
+  tags?: string[];
   classRequirement?: ClassId[];
   statBonuses?: Partial<CharacterStats>;
   specialFlag?: string;
+}
+
+export type RoomType = 'start' | 'normal' | 'treasure' | 'shrine' | 'boss' | 'checkpoint' | 'shop';
+
+export type SkillAugmentEffect = 
+  | 'orbit' 
+  | 'bounce' 
+  | 'aoe' 
+  | 'duration' 
+  | 'charges' 
+  | 'chain' 
+  | 'heal' 
+  | 'projectiles' 
+  | 'lingering' 
+  | 'crit_boost' 
+  | 'shield';
+
+export interface SkillAugment {
+  id: string;
+  name: string;
+  skillTarget: 'skill1' | 'skill2';
+  classId: ClassId;
+  subclassId?: string;
+  icon: string;
+  category: string;
+  desc: string;
+  effectType: SkillAugmentEffect;
+  value: number;
 }
 
 export interface DestructibleProp {
   id: number;
   x: number;
   y: number;
-  type: 'barrel' | 'pot' | 'chest' | 'shrine' | 'table' | 'chair' | 'crate';
+  type: 'barrel' | 'pot' | 'chest' | 'shrine' | 'table' | 'chair' | 'crate' | 'teleport_pad' | 'shop_counter' | 'skill_crucible';
   hp: number;
   opened?: boolean;
   shrineUsed?: boolean;
@@ -164,3 +234,4 @@ export interface GroundTelegraph {
   color: number;
   onExecute: () => void;
 }
+

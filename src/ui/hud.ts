@@ -16,12 +16,16 @@ export class HudManager {
   private goldText: HTMLElement | null = null;
   private zoneText: HTMLElement | null = null;
   private characterName: HTMLElement | null = null;
+  private charAvatar: HTMLElement | null = null;
+  private subclassBadge: HTMLElement | null = null;
   private bossBar: HTMLElement | null = null;
   private bossNameText: HTMLElement | null = null;
   private bossFill: HTMLElement | null = null;
   private bossHpPctText: HTMLElement | null = null;
   private minimapCanvas: HTMLCanvasElement | null = null;
   private minimapCtx: CanvasRenderingContext2D | null = null;
+  private btnHudLevelup: HTMLElement | null = null;
+  private hudLevelupCount: HTMLElement | null = null;
 
   // Desktop skill bar elements
   private dskAttackCd: HTMLElement | null = null;
@@ -65,12 +69,16 @@ export class HudManager {
     this.goldText = document.getElementById('hud-gold-text');
     this.zoneText = document.getElementById('hud-zone-text');
     this.characterName = document.getElementById('hud-char-name');
+    this.charAvatar = document.getElementById('hud-char-avatar');
+    this.subclassBadge = document.getElementById('hud-subclass-badge');
     this.bossBar = document.getElementById('hud-boss-bar');
     this.bossNameText = document.getElementById('hud-boss-name');
     this.bossFill = document.getElementById('hud-boss-fill');
     this.bossHpPctText = document.getElementById('hud-boss-hp-pct');
     this.minimapCanvas = document.getElementById('minimap-canvas') as HTMLCanvasElement;
     if (this.minimapCanvas) this.minimapCtx = this.minimapCanvas.getContext('2d');
+    this.btnHudLevelup = document.getElementById('btn-hud-levelup');
+    this.hudLevelupCount = document.getElementById('hud-levelup-count');
 
     // Desktop skill bar
     this.dskAttackCd = document.getElementById('dsk-attack-cd');
@@ -121,15 +129,15 @@ export class HudManager {
     // Desktop
     if (this.dskAttackName) this.dskAttackName.textContent = cfg.basicAttackName;
     if (this.dskS1Icon) this.dskS1Icon.textContent = cfg.skill1.icon;
-    if (this.dskS2Icon) this.dskS2Icon.textContent = cfg.skill2.icon;
+    if (this.dskS2Icon) this.dskS2Icon.textContent = player.subclass.skill2.icon;
     if (this.dskS1Name) this.dskS1Name.textContent = cfg.skill1.name;
-    if (this.dskS2Name) this.dskS2Name.textContent = cfg.skill2.name;
+    if (this.dskS2Name) this.dskS2Name.textContent = player.subclass.skill2.name;
 
     // Mobile
     if (this.mobS1Icon) this.mobS1Icon.textContent = cfg.skill1.icon;
-    if (this.mobS2Icon) this.mobS2Icon.textContent = cfg.skill2.icon;
+    if (this.mobS2Icon) this.mobS2Icon.textContent = player.subclass.skill2.icon;
     if (this.mobS1Name) this.mobS1Name.textContent = cfg.skill1.name.substring(0, 7).toUpperCase();
-    if (this.mobS2Name) this.mobS2Name.textContent = cfg.skill2.name.substring(0, 7).toUpperCase();
+    if (this.mobS2Name) this.mobS2Name.textContent = player.subclass.skill2.name.substring(0, 7).toUpperCase();
   }
 
   public update(player: Player, currentRoom: DungeonRoom, allRooms: DungeonRoom[], zone: ZoneConfig, enemies: Enemy[]): void {
@@ -156,18 +164,35 @@ export class HudManager {
     if (this.xpText) this.xpText.textContent = `${player.xp} / ${player.xpNext} EXP (${Math.round(xpPercent)}%)`;
     if (this.levelText) this.levelText.textContent = `Liv. ${player.level}`;
     if (this.goldText) this.goldText.textContent = `${player.gold} Oro`;
-    if (this.characterName) this.characterName.textContent = `${player.subclass.name}`;
+    if (this.characterName) this.characterName.textContent = CLASSES_DATA[player.classId]?.name || 'Eroe';
+    if (this.subclassBadge) this.subclassBadge.textContent = player.subclass.name;
+    if (this.charAvatar) {
+      const avatars: Record<string, string> = { paladin: '🛡️', wizard: '🔮', fighter: '⚔️', rogue: '🗡️', cleric: '⚡' };
+      this.charAvatar.textContent = avatars[player.classId] || '⚔️';
+    }
     if (this.zoneText) this.zoneText.textContent = zone.name;
+
+    // On-Demand Level-Up Notification Button
+    if (this.btnHudLevelup) {
+      if (player.pendingLevelUps > 0) {
+        this.btnHudLevelup.style.display = 'inline-flex';
+        if (this.hudLevelupCount) {
+          this.hudLevelupCount.textContent = `+${player.pendingLevelUps}`;
+        }
+      } else {
+        this.btnHudLevelup.style.display = 'none';
+      }
+    }
 
     // 2. Cooldown Indicators & Countdown Timers
     const cfg = CLASSES_DATA[player.classId];
     const s1MaxCd = cfg?.skill1?.cd ?? 5.5;
-    const s2MaxCd = cfg?.skill2?.cd ?? 4.0;
+    const s2MaxCd = player.subclass?.skill2?.cd ?? 4.0;
 
     const s1Progress = player.skill1Cd > 0 ? (player.skill1Cd / s1MaxCd) * 100 : 0;
     const s2Progress = player.skill2Cd > 0 ? (player.skill2Cd / s2MaxCd) * 100 : 0;
     const atkProgress = player.attackCd > 0 ? (player.attackCd / 0.6) * 100 : 0;
-    const dashProgress = player.dashTimer > 0 ? 100 : 0;
+    const dashProgress = player.dashCd > 0 ? (player.dashCd / player.dashMaxCd) * 100 : 0;
     const potionProgress = player.potionCd > 0 ? (player.potionCd / 3.5) * 100 : 0;
 
     // Desktop Overlays & Countdown Numbers
@@ -222,30 +247,45 @@ export class HudManager {
       this.bossBar.style.display = 'none';
     }
 
-    // 4. Minimap rendering
+    // 4. Minimap rendering with auto-centering
     if (this.minimapCtx && this.minimapCanvas) {
       const ctx = this.minimapCtx;
-      ctx.clearRect(0, 0, this.minimapCanvas.width, this.minimapCanvas.height);
+      const w = this.minimapCanvas.width;
+      const h = this.minimapCanvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      let minX = 999, maxX = -999, minY = 999, maxY = -999;
+      for (const r of allRooms) {
+        minX = Math.min(minX, r.x);
+        maxX = Math.max(maxX, r.x);
+        minY = Math.min(minY, r.y);
+        maxY = Math.max(maxY, r.y);
+      }
+      const spanX = Math.max(1, maxX - minX + 1);
+      const spanY = Math.max(1, maxY - minY + 1);
+      const cellSize = Math.min(10, Math.floor((w - 12) / Math.max(spanX, spanY)));
+      const offsetX = Math.floor((w - spanX * (cellSize + 2)) / 2);
+      const offsetY = Math.floor((h - spanY * (cellSize + 2)) / 2);
 
       for (const r of allRooms) {
         if (!r.seen && r !== currentRoom) continue;
-        const rx = 6 + r.x * 12;
-        const ry = 6 + r.y * 12;
+        const rx = offsetX + (r.x - minX) * (cellSize + 2);
+        const ry = offsetY + (r.y - minY) * (cellSize + 2);
 
         if (r === currentRoom) ctx.fillStyle = '#ffffff';
         else if (r.visited) ctx.fillStyle = '#7a708c';
         else ctx.fillStyle = '#3c3547';
-        ctx.fillRect(rx, ry, 9, 9);
+        ctx.fillRect(rx, ry, cellSize, cellSize);
 
         if (r.type === 'boss') {
           ctx.fillStyle = '#ff3355';
-          ctx.fillRect(rx + 2, ry + 2, 5, 5);
+          ctx.fillRect(rx + 2, ry + 2, Math.max(2, cellSize - 4), Math.max(2, cellSize - 4));
         } else if (r.type === 'treasure') {
           ctx.fillStyle = '#ffd700';
-          ctx.fillRect(rx + 2, ry + 2, 5, 5);
+          ctx.fillRect(rx + 2, ry + 2, Math.max(2, cellSize - 4), Math.max(2, cellSize - 4));
         } else if (r.type === 'shrine') {
           ctx.fillStyle = '#00ffff';
-          ctx.fillRect(rx + 2, ry + 2, 5, 5);
+          ctx.fillRect(rx + 2, ry + 2, Math.max(2, cellSize - 4), Math.max(2, cellSize - 4));
         }
       }
     }

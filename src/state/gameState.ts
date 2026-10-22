@@ -13,7 +13,7 @@ import { sound } from '../audio/soundEngine.ts';
 import { combat } from '../combat/combatSystem.ts';
 import { telegraphs } from '../combat/telegraphs.ts';
 import { modals } from '../ui/modals.ts';
-import { GEO, getLambert, getBasic } from '../graphics/proceduralModels.ts';
+import { GEO, getLambert, getBasic, buildGrandPortalModel } from '../graphics/proceduralModels.ts';
 
 export interface GroundLoot {
   mesh: THREE.Group;
@@ -69,11 +69,19 @@ export class GameState {
   public currentRoom: DungeonRoom | null = null;
   public enemies: Enemy[] = [];
   public groundLoots: GroundLoot[] = [];
+  public bossPortal: {
+    x: number;
+    y: number;
+    mesh: THREE.Group;
+    update: (t: number) => void;
+  } | null = null;
 
   public scene = new THREE.Scene();
   public dynamicGroup = new THREE.Group();
   public roomGroup = new THREE.Group();
   public cameraShake = 0;
+  private nearShopCounter = false;
+  private onTeleportPad = false;
 
   constructor() {
     this.currentZone = ZONES[ZONE_ORDER[this.currentZoneIndex]];
@@ -93,10 +101,23 @@ export class GameState {
     this.currentZoneIndex = 0;
     this.currentZone = ZONES[ZONE_ORDER[this.currentZoneIndex]];
 
-    // Create player
+    // Create player with matching subclass weapon
     this.dynamicGroup.clear();
     this.player = new Player(classId, subclassIndex);
-    this.player.equip.weapon = generateItem('weapon', 1, 'common');
+    const starterWeapon = generateItem('weapon', 1, 'common', classId);
+    starterWeapon.name = this.player.subclass.weaponName;
+    starterWeapon.weaponStyle = this.player.subclass.weaponStyle;
+    if (this.player.subclass.weaponStyle === 'bow') starterWeapon.modelType = 'bow';
+    else if (this.player.subclass.weaponStyle === 'wand_tome') starterWeapon.modelType = 'wand_tome';
+    else if (this.player.subclass.weaponStyle === 'dual_swords') starterWeapon.modelType = 'dual_swords';
+    else if (this.player.subclass.weaponStyle === 'greatsword_2h') starterWeapon.modelType = 'greatsword';
+    else if (this.player.subclass.weaponStyle === 'dual_daggers') starterWeapon.modelType = 'dual_daggers';
+    else if (this.player.subclass.weaponStyle === 'staff_holy') starterWeapon.modelType = 'staff_holy';
+    else if (this.player.subclass.weaponStyle === 'staff_2h') starterWeapon.modelType = 'staff';
+    else if (this.player.subclass.weaponStyle === 'mace_shield') starterWeapon.modelType = 'mace';
+    else starterWeapon.modelType = 'sword';
+    this.player.equip.weapon = starterWeapon;
+
     this.player.recalculateStats();
     this.player.hp = this.player.maxHp;
     this.dynamicGroup.add(this.player.mesh);
@@ -109,7 +130,9 @@ export class GameState {
 
   public loadZone(zone: ZoneConfig): void {
     this.currentZone = zone;
-    this.rooms = dungeon.generateFloor(zone, 6 + zone.actNumber);
+    // More rooms per level as requested: Act 1: 10 rooms, Act 2: 13 rooms, Act 3: 15 rooms, Act 4: 18 rooms
+    const targetRooms = Math.round(8 + zone.actNumber * 2.5);
+    this.rooms = dungeon.generateFloor(zone, targetRooms);
     const startRoom = this.rooms.find(r => r.type === 'start') || this.rooms[0];
     this.enterRoom(startRoom);
   }
@@ -118,6 +141,13 @@ export class GameState {
     this.currentRoom = r;
     r.visited = true;
     r.seen = true;
+
+    if (r.waypointName && !r.waypointUnlocked) {
+      r.waypointUnlocked = true;
+      sound.levelUp();
+      particles.spawnShockwave(WORLD_W / 2, WORLD_H / 2, 4.0, 0x00ffff);
+      particles.spawnFloatingText(this.player.x, 2.5, this.player.y, `✨ Portale Attivato: ${r.waypointName}! (Tasto M)`, '#00ffee', true);
+    }
 
     for (const neighbor of Object.values(r.doors)) {
       if (neighbor) neighbor.seen = true;
@@ -139,6 +169,28 @@ export class GameState {
     }
   }
 
+  public openFastTravelMap(): void {
+    if (this.state !== 'play' || !this.currentRoom) return;
+    modals.showFastTravelMap(this.rooms, this.currentRoom, (target) => {
+      this.teleportPlayerToRoom(target);
+    });
+  }
+
+  public teleportPlayerToRoom(destRoom: DungeonRoom): void {
+    if (!destRoom || this.currentRoom === destRoom) return;
+    sound.skill();
+    particles.spawnShockwave(this.player.x, this.player.y, 3.5, 0x00ffff);
+    particles.spawnBurst(this.player.x, 1.2, this.player.y, 25, 0x00ffff, 7);
+
+    this.player.x = WORLD_W / 2;
+    this.player.y = WORLD_H / 2;
+    this.enterRoom(destRoom);
+
+    particles.spawnShockwave(this.player.x, this.player.y, 4.0, 0x8a5cf6);
+    particles.spawnBurst(this.player.x, 1.2, this.player.y, 30, 0xa78bfa, 7);
+    particles.spawnFloatingText(this.player.x, 2.6, this.player.y, `Teletrasportato in: ${destRoom.waypointName || 'Stanza'}`, '#c084fc', true);
+  }
+
   private clearRoomEntities(): void {
     for (const e of this.enemies) {
       this.dynamicGroup.remove(e.mesh);
@@ -155,10 +207,11 @@ export class GameState {
   }
 
   private spawnRoomEnemies(r: DungeonRoom): void {
-    const actMult = 1.0 + (this.currentZone.actNumber - 1) * 0.45;
+    // Tougher enemies that scale more aggressively per act (+70% stats per act)
+    const actMult = 1.0 + (this.currentZone.actNumber - 1) * 0.70;
 
     if (r.type === 'boss') {
-      const boss = new Enemy(this.currentZone.bossType, WORLD_W / 2, WORLD_H * 0.35, actMult * 1.3);
+      const boss = new Enemy(this.currentZone.bossType, WORLD_W / 2, WORLD_H * 0.35, actMult * 1.45);
       this.enemies.push(boss);
       this.dynamicGroup.add(boss.mesh);
       sound.dragonRoar();
@@ -166,14 +219,16 @@ export class GameState {
     }
 
     if (r.type === 'normal') {
-      const enemyCount = 3 + Math.floor(Math.random() * 3) + this.currentZone.actNumber;
+      // More enemies per room (4 to 9 enemies)
+      const enemyCount = 4 + Math.floor(Math.random() * 3) + this.currentZone.actNumber * 2;
       for (let i = 0; i < enemyCount; i++) {
         const pool = this.currentZone.enemyPool;
         const eType = pool[Math.floor(Math.random() * pool.length)];
 
         // Guaranteed free spot inside complex room shape
         const spot = dungeon.findFreeSpot(r, this.player.x, this.player.y, 6.0);
-        const enemy = new Enemy(eType, spot.x, spot.y, actMult);
+        const isElite = Math.random() < (0.15 + this.currentZone.actNumber * 0.08);
+        const enemy = new Enemy(eType, spot.x, spot.y, actMult * (isElite ? 1.35 : 1.0));
         this.enemies.push(enemy);
         this.dynamicGroup.add(enemy.mesh);
       }
@@ -182,14 +237,6 @@ export class GameState {
 
   public update(dt: number): void {
     if (this.state !== 'play' || !this.currentRoom) return;
-
-    // Check level-up queue
-    if (this.player.pendingLevelUps > 0) {
-      this.player.pendingLevelUps--;
-      this.state = 'levelup';
-      modals.showLevelUp(this.player.level, this.player.classId);
-      return;
-    }
 
     // Check player death
     if (this.player.hp <= 0) {
@@ -262,14 +309,30 @@ export class GameState {
         bar.visible = false;
       }
 
-      // If boss room was cleared, advance to next zone or victory!
+      // If boss room was cleared, spawn grand teleport portal gate!
       if (this.currentRoom.type === 'boss') {
-        this.handleZoneVictory();
+        this.spawnBossTeleportPortal(WORLD_W / 2, WORLD_H * 0.4);
       }
     }
 
     // Update Ground Loots: spin, bob, and vacuum pickup
     const now = performance.now() * 0.001;
+
+    // Update Boss Teleport Portal (if active)
+    if (this.bossPortal) {
+      this.bossPortal.update(now);
+      const portalDist = Math.hypot(this.player.x - this.bossPortal.x, this.player.y - this.bossPortal.y);
+      if (portalDist < 1.6) {
+        sound.dash();
+        sound.levelUp();
+        particles.spawnShockwave(this.bossPortal.x, this.bossPortal.y, 4.5, 0x00ffff, 0.4);
+        particles.spawnBurst(this.bossPortal.x, 2.0, this.bossPortal.y, 30, 0x00e5ff, 8);
+        this.roomGroup.remove(this.bossPortal.mesh);
+        this.bossPortal = null;
+        this.handleZoneVictory();
+        return;
+      }
+    }
     for (let i = this.groundLoots.length - 1; i >= 0; i--) {
       const l = this.groundLoots[i];
       l.mesh.rotation.y += l.rotSpeed * dt;
@@ -556,7 +619,31 @@ export class GameState {
     for (const p of this.currentRoom.props) {
       const dist = Math.hypot(p.x - this.player.x, p.y - this.player.y);
 
-      if (dist < 1.8) {
+      if (p.type === 'shop_counter') {
+        if (dist < 2.2 && !this.nearShopCounter) {
+          this.nearShopCounter = true;
+          modals.showShop(this.player, this.currentZone, () => this.openFastTravelMap());
+        } else if (dist >= 3.2) {
+          this.nearShopCounter = false;
+        }
+      } else if (p.type === 'teleport_pad') {
+        if (dist < 1.6 && !this.onTeleportPad) {
+          this.onTeleportPad = true;
+          this.openFastTravelMap();
+        } else if (dist >= 2.6) {
+          this.onTeleportPad = false;
+        }
+      } else if (p.type === 'skill_crucible') {
+        if (dist < 2.0 && !p.opened) {
+          p.opened = true;
+          sound.chestOpen();
+          particles.spawnShockwave(p.x, p.y, 4.5, 0xd946ef);
+          particles.spawnBurst(p.x, 1.4, p.y, 30, 0xa855f7, 8);
+          modals.showSkillAugments(this.player, (aug) => {
+            particles.spawnFloatingText(this.player.x, 2.5, this.player.y, `MUTAZIONE CONSACRATA: ${aug.name}!`, '#f43f5e', true);
+          });
+        }
+      } else if (dist < 1.8) {
         if (p.type === 'chest' && !p.opened) {
           p.opened = true;
           sound.chestOpen();
@@ -618,15 +705,53 @@ export class GameState {
     }
   }
 
+  public spawnBossTeleportPortal(x: number, y: number): void {
+    if (this.bossPortal) return;
+    const model = buildGrandPortalModel();
+    model.root.position.set(x, 0, y);
+    this.roomGroup.add(model.root);
+    this.bossPortal = {
+      x,
+      y,
+      mesh: model.root,
+      update: model.update
+    };
+
+    sound.doorUnlock();
+    sound.levelUp();
+    particles.spawnShockwave(x, y, 6.0, 0x00ffff, 0.5);
+    particles.spawnBurst(x, 2.0, y, 35, 0x00e5ff, 8);
+    particles.spawnFloatingText(x, 3.8, y, '🌀 PORTALE TELETRASPORTO APERTO!', '#00e5ff', true);
+  }
+
   public applyFeat(feat: FeatUpgrade): void {
-    if (feat.statBonuses) {
-      for (const [k, v] of Object.entries(feat.statBonuses)) {
-        const key = k as keyof typeof this.player.stats;
-        (this.player.stats[key] as number) = ((this.player.stats[key] as number) || 0) + (v as number);
-      }
-    }
+    this.player.feats.push(feat);
+    this.player.pendingLevelUps = Math.max(0, this.player.pendingLevelUps - 1);
     this.player.recalculateStats();
-    this.state = 'play';
+
+    if (this.player.pendingLevelUps > 0) {
+      modals.showLevelUp(this.player);
+    } else {
+      modals.close();
+      this.state = 'play';
+    }
+  }
+
+  public exitToMainMenu(): void {
+    this.state = 'menu';
+    if (this.bossPortal) {
+      this.roomGroup.remove(this.bossPortal.mesh);
+      this.bossPortal = null;
+    }
+    this.dynamicGroup.clear();
+    this.roomGroup.clear();
+    combat.clear();
+    telegraphs.clear();
+    this.enemies = [];
+    this.groundLoots = [];
+    this.currentRoom = null;
+    this.rooms = [];
+    modals.showIntro();
   }
 }
 

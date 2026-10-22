@@ -111,17 +111,63 @@ if (btnPause) {
   btnPause.addEventListener('click', () => {
     if (gameState.state === 'play') {
       gameState.state = 'paused';
-      modals.showMessage(
-        'PAUSA DI GIOCO',
-        'L’avventura è momentaneamente sospesa. Riprendi quando sei pronto a proseguire a Okkarn.',
-        'Riprendi Partita',
-        () => {
-          gameState.state = 'play';
-        }
+      modals.showPauseMenu(
+        () => { gameState.state = 'play'; },
+        () => { gameState.exitToMainMenu(); }
       );
     }
   });
 }
+
+const btnLevelUp = document.getElementById('btn-hud-levelup');
+if (btnLevelUp) {
+  btnLevelUp.addEventListener('click', () => {
+    if (gameState.state === 'play' && gameState.player.pendingLevelUps > 0) {
+      gameState.state = 'levelup';
+      modals.showLevelUp(gameState.player);
+    }
+  });
+}
+
+const btnMap = document.getElementById('btn-open-map');
+if (btnMap) {
+  btnMap.addEventListener('click', () => {
+    if (gameState.state === 'play') {
+      gameState.openFastTravelMap();
+    }
+  });
+}
+
+const minimapCanvas = document.getElementById('minimap-canvas');
+if (minimapCanvas) {
+  minimapCanvas.addEventListener('click', () => {
+    if (gameState.state === 'play') {
+      gameState.openFastTravelMap();
+    }
+  });
+}
+
+// Connect Desktop Action Bar Clicks
+document.getElementById('dsk-attack')?.addEventListener('click', () => {
+  if (gameState.state === 'play' && gameState.currentRoom) {
+    combat.castBasicAttack(gameState.player, gameState.enemies, gameState.currentRoom);
+  }
+});
+document.getElementById('dsk-skill1')?.addEventListener('click', () => {
+  if (gameState.state === 'play') {
+    combat.castSkill1(gameState.player, gameState.enemies);
+  }
+});
+document.getElementById('dsk-skill2')?.addEventListener('click', () => {
+  if (gameState.state === 'play' && gameState.currentRoom) {
+    combat.castSkill2(gameState.player, gameState.currentRoom, gameState.enemies);
+  }
+});
+document.getElementById('dsk-dash')?.addEventListener('click', () => {
+  if (gameState.state === 'play') {
+    combat.performDodge(gameState.player);
+  }
+});
 
 // 4. Main Game Loop
 let lastTime = performance.now();
@@ -129,6 +175,21 @@ let lastTime = performance.now();
 function gameLoop(now: number): void {
   const dt = Math.min(0.033, (now - lastTime) / 1000);
   lastTime = now;
+
+  // Global pause toggle check
+  if (input.isPauseRequested) {
+    input.isPauseRequested = false;
+    if (gameState.state === 'play') {
+      gameState.state = 'paused';
+      modals.showPauseMenu(
+        () => { gameState.state = 'play'; },
+        () => { gameState.exitToMainMenu(); }
+      );
+    } else if (gameState.state === 'paused') {
+      modals.close();
+      gameState.state = 'play';
+    }
+  }
 
   if (gameState.state === 'play' && gameState.currentRoom) {
     // 1. Process player inputs
@@ -140,10 +201,16 @@ function gameLoop(now: number): void {
       gameState.state = 'inventory';
       modals.showInventory(gameState.player);
     }
-    if (input.isPauseRequested) {
-      input.isPauseRequested = false;
-      gameState.state = 'paused';
-      modals.showMessage('PAUSA DI GIOCO', 'Partita in pausa.', 'Riprendi', () => { gameState.state = 'play'; });
+    if (input.isLevelUpRequested) {
+      input.isLevelUpRequested = false;
+      if (gameState.player.pendingLevelUps > 0) {
+        gameState.state = 'levelup';
+        modals.showLevelUp(gameState.player);
+      }
+    }
+    if (input.isMapRequested) {
+      input.isMapRequested = false;
+      gameState.openFastTravelMap();
     }
 
     // Move player
@@ -157,10 +224,13 @@ function gameLoop(now: number): void {
       input.isSkill1Pressed = false;
       combat.castSkill1(gameState.player, gameState.enemies);
     }
-    if (input.isSkill2Pressed || input.isDashPressed) {
+    if (input.isSkill2Pressed) {
       input.isSkill2Pressed = false;
+      combat.castSkill2(gameState.player, gameState.currentRoom, gameState.enemies);
+    }
+    if (input.isDashPressed) {
       input.isDashPressed = false;
-      combat.castSkill2(gameState.player, gameState.currentRoom);
+      combat.performDodge(gameState.player);
     }
     if (input.isPotionRequested) {
       input.isPotionRequested = false;

@@ -4,9 +4,11 @@
 
 import { CLASSES_DATA } from '../types/classesData.ts';
 import { getRandomFeatChoices } from '../items/featsDatabase.ts';
-import { RARITIES, STAT_LABELS_IT } from '../items/itemDatabase.ts';
-import type { ClassId, FeatUpgrade, Item, CharacterStats } from '../types/game.ts';
+import { generateItem, RARITIES, STAT_LABELS_IT } from '../items/itemDatabase.ts';
+import { getAugmentChoicesForPlayer } from '../items/skillAugmentsDatabase.ts';
+import type { ClassId, FeatUpgrade, Item, ItemSlot, CharacterStats, SkillAugment, ZoneConfig } from '../types/game.ts';
 import type { Player } from '../entities/player.ts';
+import type { DungeonRoom } from '../world/dungeonGenerator.ts';
 import { sound } from '../audio/soundEngine.ts';
 
 export interface LeaderboardEntry {
@@ -89,9 +91,15 @@ export class ModalManager {
   private levelUpPanel: HTMLElement | null = null;
   private inventoryPanel: HTMLElement | null = null;
   private messagePanel: HTMLElement | null = null;
+  private mapPanel: HTMLElement | null = null;
+  private skillAugmentsPanel: HTMLElement | null = null;
+  private shopPanel: HTMLElement | null = null;
 
   public settings: GameSettings = { ...DEFAULT_SETTINGS };
   private selectedBagIndex: number = 0;
+  public isShopOpen = false;
+  private shopInventory: Item[] = [];
+  private shopInventoryZone = 0;
 
   public onClassSelected: ((classId: ClassId, subclassIndex: number) => void) | null = null;
   public onFeatChosen: ((feat: FeatUpgrade) => void) | null = null;
@@ -108,6 +116,9 @@ export class ModalManager {
     this.levelUpPanel = document.getElementById('panel-level-up');
     this.inventoryPanel = document.getElementById('panel-inventory');
     this.messagePanel = document.getElementById('panel-message');
+    this.mapPanel = document.getElementById('panel-map');
+    this.skillAugmentsPanel = document.getElementById('panel-skill-augments');
+    this.shopPanel = document.getElementById('panel-shop');
 
     this.loadSettings();
   }
@@ -122,7 +133,10 @@ export class ModalManager {
       this.classSelectPanel,
       this.levelUpPanel,
       this.inventoryPanel,
-      this.messagePanel
+      this.messagePanel,
+      this.mapPanel,
+      this.skillAugmentsPanel,
+      this.shopPanel
     ].forEach(p => {
       if (p) p.style.display = 'none';
     });
@@ -388,18 +402,21 @@ export class ModalManager {
           <p class="class-desc">${c.description}</p>
           
           <div class="skill-preview">
-            <div><b>Attacco:</b> ${c.basicAttackName}</div>
-            <div><b>Abilità 1:</b> ${c.skill1.icon} ${c.skill1.name} <span class="skill-cd">(CD: ${c.skill1.cd}s)</span></div>
-            <div><b>Abilità 2:</b> ${c.skill2.icon} ${c.skill2.name} <span class="skill-cd">(CD: ${c.skill2.cd}s)</span></div>
+            <div><b>Attacco Base:</b> ${c.basicAttackName}</div>
+            <div><b>Abilità Primaria:</b> ${c.skill1.icon} ${c.skill1.name} <span class="skill-cd">(CD: ${c.skill1.cd}s)</span></div>
           </div>
 
           <div class="subclass-pickers">
             <button class="btn-subclass" data-class="${c.id}" data-sub="0">
-              <b>${sub0.name}</b>
+              <div class="sub-name-row"><b>${sub0.name}</b></div>
+              <div class="sub-gear-row">⚔️ <i>${sub0.weaponName}</i></div>
+              <div class="sub-skill-row">${sub0.skill2.icon} <b>Abilità 2:</b> ${sub0.skill2.name}</div>
               <small>${sub0.bonusDesc}</small>
             </button>
             <button class="btn-subclass" data-class="${c.id}" data-sub="1">
-              <b>${sub1.name}</b>
+              <div class="sub-name-row"><b>${sub1.name}</b></div>
+              <div class="sub-gear-row">⚔️ <i>${sub1.weaponName}</i></div>
+              <div class="sub-skill-row">${sub1.skill2.icon} <b>Abilità 2:</b> ${sub1.skill2.name}</div>
               <small>${sub1.bonusDesc}</small>
             </button>
           </div>
@@ -427,8 +444,8 @@ export class ModalManager {
     }
   }
 
-  // --- 2. D&D Feats Level-Up Card Selection (Class-Filtered) ---
-  public showLevelUp(level: number, classId?: ClassId): void {
+  // --- 2. Roguelike Feats Level-Up Card Selection (Class-Filtered & On-Demand) ---
+  public showLevelUp(player: Player): void {
     this.hideAll();
     if (!this.overlay || !this.levelUpPanel) return;
 
@@ -437,28 +454,108 @@ export class ModalManager {
     this.levelUpPanel.style.display = 'flex';
 
     const title = document.getElementById('level-up-title');
-    if (title) title.textContent = `AVANZAMENTO AL LIVELLO ${level}`;
+    if (title) title.textContent = `AVANZAMENTO AL LIVELLO ${player.level}`;
+
+    const pointsCount = document.getElementById('levelup-points-count');
+    if (pointsCount) pointsCount.textContent = `${Math.max(1, player.pendingLevelUps)}`;
 
     const container = document.getElementById('feat-cards-container');
     if (!container) return;
 
-    const feats = getRandomFeatChoices(3, classId);
-    container.innerHTML = feats.map((f, i) => `
-      <div class="feat-card" data-index="${i}" style="--accent:${f.color}">
-        <span class="feat-category">${f.category}</span>
-        <h3 class="feat-name">${f.name}</h3>
-        <p class="feat-desc">${f.desc}</p>
-        <button class="btn-choose-feat">Scegli Talento</button>
-      </div>
-    `).join('');
+    const renderCards = () => {
+      const feats = getRandomFeatChoices(3, player.classId);
+      const rarityLabels: Record<string, string> = {
+        common: 'COMUNE',
+        rare: 'RARO',
+        epic: 'EPICO',
+        legendary: 'LEGGENDARIO'
+      };
 
-    container.querySelectorAll('.feat-card').forEach((card, i) => {
-      card.addEventListener('click', () => {
-        sound.levelUp();
-        this.hideAll();
-        if (this.onFeatChosen) this.onFeatChosen(feats[i]);
+      container.innerHTML = feats.map((f, i) => `
+        <div class="feat-card feat-${f.rarity || 'common'}" data-index="${i}" style="--accent:${f.color}">
+          <div class="feat-card-glow-bg"></div>
+          <div class="feat-card-top">
+            <span class="feat-rarity-badge ${f.rarity || 'common'}">
+              <span class="gem-dot"></span>
+              ${rarityLabels[f.rarity || 'common']}
+            </span>
+            <span class="feat-category-pill">${f.category}</span>
+          </div>
+
+          <div class="feat-art-alcove">
+            <div class="alcove-aura"></div>
+            <span class="feat-icon-large">${f.icon || '✨'}</span>
+          </div>
+
+          <h3 class="feat-name">${f.name}</h3>
+          <div class="feat-divider"></div>
+          <p class="feat-desc">${f.desc}</p>
+          
+          ${f.tags ? `<div class="feat-tags-row">${f.tags.map(t => `<span class="feat-tag">#${t}</span>`).join('')}</div>` : ''}
+          <div class="feat-source">📜 ${f.dndSource}</div>
+          
+          <div class="feat-action-wrap">
+            <button class="btn-choose-feat">Consacra Talento</button>
+          </div>
+        </div>
+      `).join('');
+
+      container.querySelectorAll('.feat-card').forEach((card, i) => {
+        card.addEventListener('click', () => {
+          sound.levelUp();
+          if (this.onFeatChosen) this.onFeatChosen(feats[i]);
+        });
       });
-    });
+    };
+
+    renderCards();
+
+    // Re-roll button (50 gold)
+    const btnReroll = document.getElementById('btn-reroll-feats');
+    if (btnReroll) {
+      const fresh = btnReroll.cloneNode(true) as HTMLElement;
+      btnReroll.parentNode?.replaceChild(fresh, btnReroll);
+      fresh.addEventListener('click', () => {
+        if (player.gold >= 50) {
+          player.gold -= 50;
+          sound.coin();
+          renderCards();
+        } else {
+          sound.playerHurt();
+          fresh.textContent = '❌ Oro Insufficiente (50)!';
+          setTimeout(() => { fresh.textContent = '🎲 Rilancia Scelte (50 Oro)'; }, 1500);
+        }
+      });
+    }
+
+    // Skip button (+75 gold)
+    const btnSkip = document.getElementById('btn-skip-feat-gold');
+    if (btnSkip) {
+      const fresh = btnSkip.cloneNode(true) as HTMLElement;
+      btnSkip.parentNode?.replaceChild(fresh, btnSkip);
+      fresh.addEventListener('click', () => {
+        player.gold += 75;
+        sound.coin();
+        player.pendingLevelUps = Math.max(0, player.pendingLevelUps - 1);
+        if (player.pendingLevelUps > 0) {
+          this.showLevelUp(player);
+        } else {
+          this.close();
+          if (this.onResumeGame) this.onResumeGame();
+        }
+      });
+    }
+
+    // Close and choose later button
+    const btnClose = document.getElementById('btn-close-levelup');
+    if (btnClose) {
+      const fresh = btnClose.cloneNode(true) as HTMLElement;
+      btnClose.parentNode?.replaceChild(fresh, btnClose);
+      fresh.addEventListener('click', () => {
+        this.close();
+        if (this.onResumeGame) this.onResumeGame();
+      });
+    }
   }
 
   // --- 3. Modern User-Friendly Inventory & Paperdoll Sheet ---
@@ -747,6 +844,538 @@ export class ModalManager {
       this.hideAll();
       onAction();
     });
+  }
+
+  public showPauseMenu(onResume: () => void, onQuitToMenu: () => void): void {
+    this.hideAll();
+    if (!this.overlay || !this.messagePanel) return;
+
+    this.overlay.classList.add('active');
+    this.messagePanel.style.display = 'flex';
+
+    this.messagePanel.innerHTML = `
+      <div class="message-box" style="max-width: 500px;">
+        <h2 class="message-title">⏸️ PAUSA DI GIOCO</h2>
+        <p class="message-body">L’avventura è momentaneamente sospesa. Puoi riprendere l'esplorazione oppure abbandonare la spedizione attuale per tornare al Menu Principale e scegliere un'altra classe.</p>
+        <div style="display: flex; gap: 14px; margin-top: 12px; flex-wrap: wrap;">
+          <button id="pause-btn-resume" class="btn-message-action" style="flex: 1; min-width: 180px;">▶️ Riprendi Partita</button>
+          <button id="pause-btn-quit" class="btn-message-action" style="flex: 1; min-width: 180px; background: linear-gradient(135deg, #7a1e28 0%, #4a0d15 100%); border-color: #ff6b7d; color: #ffe6e8;">🚪 Abbandona al Menu</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('pause-btn-resume')?.addEventListener('click', () => {
+      this.hideAll();
+      onResume();
+    });
+
+    document.getElementById('pause-btn-quit')?.addEventListener('click', () => {
+      this.hideAll();
+      onQuitToMenu();
+    });
+  }
+
+  // --- 5. FAST TRAVEL MAP (Waypoints & Teleport) ---
+  public showFastTravelMap(
+    rooms: DungeonRoom[],
+    currentRoom: DungeonRoom,
+    onTeleport: (targetRoom: DungeonRoom) => void
+  ): void {
+    this.hideAll();
+    if (!this.overlay || !this.mapPanel) return;
+
+    this.overlay.classList.add('active');
+    this.mapPanel.style.display = 'flex';
+
+    const waypoints = rooms.filter(r => r.waypointName);
+    const unlockedWaypoints = waypoints.filter(r => r.waypointUnlocked);
+
+    let html = `
+      <div class="map-modal-content">
+        <div class="map-header">
+          <div>
+            <h2 class="map-title">🗺️ RETE DEI PORTALI DI TELETRASPORTO</h2>
+            <p class="map-subtitle">Usa la risonanza dei cristalli di Vazark per teletrasportarti istantaneamente tra i nodi sbloccati della mappa (Tasto Rapido: [M]).</p>
+          </div>
+          <button id="map-btn-close" class="modal-close-btn">&times;</button>
+        </div>
+
+        <div class="map-body-layout">
+          <!-- Waypoint list -->
+          <div class="waypoints-list">
+            <h3 class="waypoints-list-title">📡 Nodi di Risonanza (${unlockedWaypoints.length}/${waypoints.length} Sbloccati)</h3>
+    `;
+
+    waypoints.forEach(wp => {
+      const isCurrent = wp === currentRoom;
+      const isUnlocked = wp.waypointUnlocked;
+      let badgeClass = 'badge-normal';
+      let icon = '🌀';
+      if (wp.type === 'start') {
+        badgeClass = 'badge-start';
+        icon = '🏰';
+      } else if (wp.type === 'checkpoint') {
+        badgeClass = 'badge-checkpoint';
+        icon = '⚔️';
+      } else if (wp.type === 'shop') {
+        badgeClass = 'badge-shop';
+        icon = '🪙';
+      }
+
+      html += `
+        <div class="waypoint-card ${isCurrent ? 'waypoint-current' : ''} ${!isUnlocked ? 'waypoint-locked' : ''}">
+          <div class="wp-icon">${icon}</div>
+          <div class="wp-info">
+            <div class="wp-title-row">
+              <span class="wp-name">${wp.waypointName}</span>
+              <span class="wp-badge ${badgeClass}">${wp.type === 'start' ? 'Inizio' : wp.type === 'checkpoint' ? 'Guardiano' : wp.type === 'shop' ? 'Emporio' : 'Portale'}</span>
+            </div>
+            <div class="wp-status">
+              ${isCurrent ? '📌 <span class="text-accent">Posizione Attuale</span>' : isUnlocked ? '✨ Attivo e Risonante' : '🔒 Inesplorato (trova la stanza per attivarlo)'}
+            </div>
+          </div>
+          <div class="wp-actions">
+            ${isCurrent ? '<button class="btn-wp-teleport current" disabled>Sei Qui</button>' : isUnlocked ? `<button class="btn-wp-teleport active" data-target-key="${wp.x},${wp.y}">⚡ Teletrasporta</button>` : '<button class="btn-wp-teleport locked" disabled>Bloccato</button>'}
+          </div>
+        </div>
+      `;
+    });
+
+    html += `
+          </div>
+          <!-- Minimap Canvas Container -->
+          <div class="map-canvas-container">
+            <canvas id="interactive-fast-travel-canvas" width="340" height="340"></canvas>
+            <div class="map-canvas-hint">Premi <strong>[M]</strong> per aprire/chiudere o clicca un nodo sbloccato per teletrasportarti.</div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.mapPanel.innerHTML = html;
+
+    // Close button
+    document.getElementById('map-btn-close')?.addEventListener('click', () => {
+      this.hideAll();
+    });
+
+    // Teleport buttons
+    this.mapPanel.querySelectorAll<HTMLButtonElement>('.btn-wp-teleport.active').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetKey = btn.dataset.targetKey;
+        const targetRoom = waypoints.find(r => `${r.x},${r.y}` === targetKey);
+        if (targetRoom) {
+          sound.teleport();
+          this.hideAll();
+          onTeleport(targetRoom);
+        }
+      });
+    });
+
+    // Draw interactive canvas
+    const canvas = document.getElementById('interactive-fast-travel-canvas') as HTMLCanvasElement | null;
+    if (canvas) {
+      this.drawMinimapCanvas(canvas, rooms, currentRoom, onTeleport);
+    }
+  }
+
+  private drawMinimapCanvas(
+    canvas: HTMLCanvasElement,
+    rooms: DungeonRoom[],
+    currentRoom: DungeonRoom,
+    onTeleport: (targetRoom: DungeonRoom) => void
+  ): void {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    rooms.forEach(r => {
+      if (r.x < minX) minX = r.x;
+      if (r.x > maxX) maxX = r.x;
+      if (r.y < minY) minY = r.y;
+      if (r.y > maxY) maxY = r.y;
+    });
+
+    const cols = maxX - minX + 1;
+    const rows = maxY - minY + 1;
+    const cellW = Math.min(canvas.width / (cols + 1), 48);
+    const cellH = Math.min(canvas.height / (rows + 1), 48);
+    const cellSize = Math.min(cellW, cellH);
+
+    const offsetX = (canvas.width - cols * cellSize) / 2;
+    const offsetY = (canvas.height - rows * cellSize) / 2;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw hallway connections between rooms
+    ctx.strokeStyle = 'rgba(100, 150, 255, 0.25)';
+    ctx.lineWidth = 3;
+    rooms.forEach(r => {
+      const rx = offsetX + (r.x - minX + 0.5) * cellSize;
+      const ry = offsetY + (r.y - minY + 0.5) * cellSize;
+      for (const neighbor of Object.values(r.doors)) {
+        if (!neighbor) continue;
+        const nx = offsetX + (neighbor.x - minX + 0.5) * cellSize;
+        const ny = offsetY + (neighbor.y - minY + 0.5) * cellSize;
+        ctx.beginPath();
+        ctx.moveTo(rx, ry);
+        ctx.lineTo(nx, ny);
+        ctx.stroke();
+      }
+    });
+
+    // Draw rooms
+    rooms.forEach(r => {
+      const rx = offsetX + (r.x - minX) * cellSize + 4;
+      const ry = offsetY + (r.y - minY) * cellSize + 4;
+      const rw = cellSize - 8;
+      const rh = cellSize - 8;
+
+      const isCurrent = r === currentRoom;
+      const hasWp = !!r.waypointName;
+
+      if (!r.seen) {
+        ctx.fillStyle = 'rgba(25, 28, 45, 0.4)';
+        ctx.strokeStyle = 'rgba(50, 60, 90, 0.4)';
+      } else if (r.type === 'boss') {
+        ctx.fillStyle = '#4a0d18';
+        ctx.strokeStyle = '#ff3366';
+      } else if (r.type === 'shop') {
+        ctx.fillStyle = '#3a2e0a';
+        ctx.strokeStyle = '#ffd700';
+      } else if (r.type === 'treasure') {
+        ctx.fillStyle = '#3b2505';
+        ctx.strokeStyle = '#ffaa00';
+      } else if (r.type === 'start') {
+        ctx.fillStyle = '#0f2f25';
+        ctx.strokeStyle = '#00ffaa';
+      } else if (r.type === 'checkpoint') {
+        ctx.fillStyle = '#1e1c3e';
+        ctx.strokeStyle = '#8a5cf6';
+      } else {
+        ctx.fillStyle = r.cleared ? 'rgba(30, 42, 65, 0.9)' : 'rgba(45, 30, 30, 0.9)';
+        ctx.strokeStyle = r.cleared ? '#3d639b' : '#883333';
+      }
+
+      ctx.lineWidth = isCurrent ? 3 : 1.5;
+      ctx.beginPath();
+      ctx.roundRect(rx, ry, rw, rh, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // Waypoint icon on canvas
+      if (hasWp && r.waypointUnlocked) {
+        ctx.fillStyle = '#00ffff';
+        ctx.beginPath();
+        ctx.arc(rx + rw / 2, ry + rh / 2, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (isCurrent) {
+        ctx.fillStyle = '#ffea00';
+        ctx.beginPath();
+        ctx.arc(rx + rw / 2, ry + rh / 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+
+    // Clicking on canvas teleport node
+    canvas.onclick = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      rooms.forEach(r => {
+        if (!r.waypointName || !r.waypointUnlocked || r === currentRoom) return;
+        const rx = offsetX + (r.x - minX) * cellSize + 4;
+        const ry = offsetY + (r.y - minY) * cellSize + 4;
+        const rw = cellSize - 8;
+        const rh = cellSize - 8;
+        if (clickX >= rx && clickX <= rx + rw && clickY >= ry && clickY <= ry + rh) {
+          sound.teleport();
+          this.hideAll();
+          onTeleport(r);
+        }
+      });
+    };
+  }
+
+  // --- 6. SKILL AUGMENTS (Treasure Room Crucible) ---
+  public showSkillAugments(
+    player: Player,
+    onSelected: (augment: SkillAugment) => void
+  ): void {
+    this.hideAll();
+    if (!this.overlay || !this.skillAugmentsPanel) return;
+
+    this.overlay.classList.add('active');
+    this.skillAugmentsPanel.style.display = 'flex';
+
+    const choices = getAugmentChoicesForPlayer(player);
+    const classData = CLASSES_DATA[player.classId];
+    const sub = player.subclass;
+
+    let html = `
+      <div class="skill-augments-modal-content">
+        <div class="augments-header">
+          <div class="crucible-badge">🔮 CROGIOLO DELLA MAESTRIA ARCANA</div>
+          <h2 class="augments-title">Consacra una Mutazione di Abilità</h2>
+          <p class="augments-subtitle">
+            L'antico altare canalizza il potere delle profondità. Seleziona un potenziamento per alterare in modo permanente le tue abilità di <strong>${classData.name} (${sub.name})</strong>.
+          </p>
+        </div>
+
+        <div class="augments-grid">
+    `;
+
+    if (choices.length === 0) {
+      html += `
+        <div class="no-augments-message">
+          <h3>Tutte le abilità sono al massimo potenziale!</h3>
+          <p>Hai già consacrato tutte le mutazioni disponibili per la tua classe e sottoclasse.</p>
+        </div>
+      `;
+    } else {
+      choices.forEach(aug => {
+        const isSkill1 = aug.skillTarget === 'skill1';
+        const targetSkillName = isSkill1 ? classData.skill1.name : sub.skill2.name;
+        const targetSkillKey = isSkill1 ? 'Skill [1] Primaria' : 'Skill [2] Secondaria';
+
+        html += `
+          <div class="augment-card">
+            <div class="augment-target-badge ${isSkill1 ? 'target-skill1' : 'target-skill2'}">
+              ${isSkill1 ? '⚔️' : '✨'} ${targetSkillKey}: ${targetSkillName}
+            </div>
+            <div class="augment-icon-container">
+              <span class="augment-icon">${aug.icon}</span>
+            </div>
+            <h3 class="augment-name">${aug.name}</h3>
+            <p class="augment-desc">${aug.desc}</p>
+            <div class="augment-flavor">Risonanza Arcana Permanente</div>
+            <button class="btn-choose-augment" data-aug-id="${aug.id}">
+              ✨ Consacra Mutazione
+            </button>
+          </div>
+        `;
+      });
+    }
+
+    html += `
+        </div>
+      </div>
+    `;
+
+    this.skillAugmentsPanel.innerHTML = html;
+
+    this.skillAugmentsPanel.querySelectorAll<HTMLButtonElement>('.btn-choose-augment').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const augId = btn.dataset.augId;
+        const chosen = choices.find(a => a.id === augId);
+        if (chosen) {
+          player.skillAugments.push(chosen);
+          sound.levelUp();
+          this.hideAll();
+          onSelected(chosen);
+        }
+      });
+    });
+  }
+
+  // --- 7. SHOP MODAL (Merchant & Gear Purchases) ---
+  private generateShopInventory(player: Player, zone: ZoneConfig): void {
+    this.shopInventory = [];
+    const slots: ItemSlot[] = ['weapon', 'armor', 'helm', 'ring', 'relic'];
+    for (let i = 0; i < 5; i++) {
+      const slot = slots[i % slots.length];
+      const rar = i === 0 ? 'rare' : i === 1 ? 'epic' : (Math.random() < 0.5 ? 'rare' : 'uncommon');
+      const item = generateItem(slot, zone.actNumber + 1, rar, player.classId);
+      this.shopInventory.push(item);
+    }
+  }
+
+  public showShop(
+    player: Player,
+    zone: ZoneConfig,
+    onOpenFastTravel?: () => void
+  ): void {
+    this.hideAll();
+    if (!this.overlay || !this.shopPanel) return;
+
+    this.overlay.classList.add('active');
+    this.shopPanel.style.display = 'flex';
+    this.isShopOpen = true;
+
+    if (this.shopInventory.length === 0 || this.shopInventoryZone !== zone.actNumber) {
+      this.generateShopInventory(player, zone);
+      this.shopInventoryZone = zone.actNumber;
+    }
+
+    const renderShopContent = () => {
+      if (!this.shopPanel) return;
+
+      let html = `
+        <div class="shop-modal-content">
+          <div class="shop-header">
+            <div class="shop-merchant-intro">
+              <div class="merchant-avatar">🧙‍♂️</div>
+              <div>
+                <h2 class="shop-title">Emporio Sotterraneo dei Renegades</h2>
+                <p class="shop-subtitle">"Merce rara forgiata negli abissi, viandante. Oro in cambio di potenza!"</p>
+              </div>
+            </div>
+            <div class="shop-header-right">
+              <div class="shop-player-gold">
+                💰 Oro: <span class="gold-amount">${player.gold}</span>
+              </div>
+              <button id="shop-btn-fast-travel" class="btn-shop-teleport">🌀 Rete Teletrasporti [M]</button>
+              <button id="shop-btn-close" class="modal-close-btn">&times;</button>
+            </div>
+          </div>
+
+          <div class="shop-main-layout">
+            <!-- Merchant Catalog -->
+            <div class="shop-catalog-section">
+              <h3 class="shop-section-title">📦 Beni in Vendita dal Mercante</h3>
+
+              <!-- Potion row -->
+              <div class="shop-item-card potion-card">
+                <div class="shop-item-icon">🧪</div>
+                <div class="shop-item-details">
+                  <div class="shop-item-name rarity-magic">Elisir Vitale Superiore</div>
+                  <div class="shop-item-stats">Ripristina istantaneamente 85 Punti Vita</div>
+                </div>
+                <div class="shop-item-buy">
+                  <span class="item-price">💰 40 Oro</span>
+                  <button id="btn-buy-potion" class="btn-shop-buy" ${player.gold < 40 ? 'disabled' : ''}>Acquista</button>
+                </div>
+              </div>
+
+              <!-- Gear Items Grid -->
+              <div class="shop-items-grid">
+      `;
+
+      if (this.shopInventory.length === 0) {
+        html += `<div class="shop-empty-notice">Tutta la merce del mercante per questo piano è stata acquistata!</div>`;
+      } else {
+        this.shopInventory.forEach((item, idx) => {
+          const rarity = RARITIES[item.rarity];
+          const canAfford = player.gold >= item.goldValue;
+          const statLines = Object.entries(item.stats)
+            .filter(([_, v]) => v && v > 0)
+            .map(([k, v]) => `+${v} ${STAT_LABELS_IT[k as keyof CharacterStats] || k}`)
+            .join(' · ');
+
+          html += `
+            <div class="shop-item-card">
+              <div class="shop-item-icon" style="color: ${rarity.color}">${item.icon}</div>
+              <div class="shop-item-details">
+                <div class="shop-item-name" style="color: ${rarity.color}">${item.name}</div>
+                <div class="shop-item-type">${item.slot.toUpperCase()} · Livello ${item.ilvl} (${rarity.name})</div>
+                <div class="shop-item-stats">${statLines || 'Oggetto speciale'}</div>
+              </div>
+              <div class="shop-item-buy">
+                <span class="item-price">💰 ${item.goldValue} Oro</span>
+                <button class="btn-shop-buy" data-shop-idx="${idx}" ${!canAfford ? 'disabled' : ''}>Acquista</button>
+              </div>
+            </div>
+          `;
+        });
+      }
+
+      html += `
+              </div>
+            </div>
+
+            <!-- Player Inventory to sell items -->
+            <div class="shop-inventory-section">
+              <h3 class="shop-section-title">🎒 Il Tuo Zaino (Vendi Oggetti)</h3>
+              <div class="shop-player-items">
+      `;
+
+      if (player.bag.length === 0) {
+        html += `<div class="shop-empty-notice">Lo zaino è vuoto.</div>`;
+      } else {
+        player.bag.forEach((item, idx) => {
+          const rarity = RARITIES[item.rarity];
+          const sellPrice = Math.max(5, Math.floor(item.goldValue * 0.45));
+
+          html += `
+            <div class="shop-sell-card">
+              <span class="sell-icon" style="color: ${rarity.color}">${item.icon}</span>
+              <div class="sell-info">
+                <span class="sell-name" style="color: ${rarity.color}">${item.name}</span>
+                <span class="sell-sub">${item.slot} (Liv. ${item.ilvl})</span>
+              </div>
+              <button class="btn-shop-sell" data-sell-idx="${idx}">Vendi (+${sellPrice} 💰)</button>
+            </div>
+          `;
+        });
+      }
+
+      html += `
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      this.shopPanel!.innerHTML = html;
+
+      // Close handler
+      document.getElementById('shop-btn-close')?.addEventListener('click', () => {
+        this.isShopOpen = false;
+        this.hideAll();
+      });
+
+      // Fast travel from shop
+      document.getElementById('shop-btn-fast-travel')?.addEventListener('click', () => {
+        this.isShopOpen = false;
+        this.hideAll();
+        if (onOpenFastTravel) onOpenFastTravel();
+      });
+
+      // Buy potion
+      document.getElementById('btn-buy-potion')?.addEventListener('click', () => {
+        if (player.gold >= 40) {
+          player.gold -= 40;
+          player.hp = Math.min(player.maxHp, player.hp + 85);
+          sound.coin();
+          renderShopContent();
+        }
+      });
+
+      // Buy item
+      this.shopPanel!.querySelectorAll<HTMLButtonElement>('.btn-shop-buy[data-shop-idx]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.shopIdx || '0', 10);
+          const item = this.shopInventory[idx];
+          if (item && player.gold >= item.goldValue) {
+            player.gold -= item.goldValue;
+            player.bag.push(item);
+            this.shopInventory.splice(idx, 1);
+            sound.coin();
+            renderShopContent();
+          }
+        });
+      });
+
+      // Sell item
+      this.shopPanel!.querySelectorAll<HTMLButtonElement>('.btn-shop-sell[data-sell-idx]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.sellIdx || '0', 10);
+          const item = player.bag[idx];
+          if (item) {
+            const sellPrice = Math.max(5, Math.floor(item.goldValue * 0.45));
+            player.gold += sellPrice;
+            player.bag.splice(idx, 1);
+            sound.coin();
+            renderShopContent();
+          }
+        });
+      });
+    };
+
+    renderShopContent();
   }
 
   public close(): void {

@@ -1,7 +1,7 @@
 // D&D 5e Classic Equipment, Rarities and Procedural Generation
 // The Albedo Renegades: Shadow of Elanthria
 
-import type { Item, ItemRarity, ItemSlot, CharacterStats, ClassId } from '../types/game.ts';
+import type { Item, ItemRarity, ItemSlot, CharacterStats, ClassId, WeaponModelType, HelmModelType, ArmorModelType, WeaponStyle } from '../types/game.ts';
 
 export const RARITIES: Record<ItemRarity, { name: string; color: string; hex: number; affixCount: number; mult: number }> = {
   common: { name: 'Comune', color: '#b0a8c0', hex: 0xb0a8c0, affixCount: 0, mult: 1.0 },
@@ -36,8 +36,8 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
   wizard: {
     weapon: [
       'Bastone dell’Arcimago',
+      'Bacchetta di Cristallo & Tomo Antico',
       'Verga del Fuoco Arcano',
-      'Bacchetta di Cristallo Puro',
       'Scettro della Trama di Elshiff',
       'Bastone delle Tempeste Astrali'
     ],
@@ -48,8 +48,8 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
       'Robe Tessute di Stelle'
     ],
     helm: [
+      'Cappello a Punta dell’Arcano',
       'Diadema Arcano di Cristallo',
-      'Cappuccio dell’Ombra Astrale',
       'Corona della Mente Chiara'
     ],
     ring: [
@@ -65,10 +65,12 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
   },
   fighter: {
     weapon: [
+      'Grande Ascia da Battaglia di Azren',
+      'Bipenne Gigante del Berserker',
       'Spadone a Due Mani dei Renegades',
-      'Grande Ascia di Azren',
+      'Doppie Spade di Acciaio Valiriano',
       'Maglio Frantuma-Ossa',
-      'Spada Bastarda di Acciaio Valiriano'
+      'Ascia da Guerra Pesante'
     ],
     armor: [
       'Corazza a Piastre del Cavaliere',
@@ -92,8 +94,9 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
   paladin: {
     weapon: [
       'Spada Lunga Benedetta',
-      'Lama della Punizione Divina',
-      'Martello Sacro dell’Alba',
+      'Spadone Sacro del Giudizio',
+      'Martello Radioso dell’Alba',
+      'Ascia Sacra della Giustizia',
       'Spada Radiosa dei Renegades'
     ],
     armor: [
@@ -103,7 +106,8 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
     ],
     helm: [
       'Elmo del Guardiano Divino',
-      'Celata d’Oro dei Renegades'
+      'Celata d’Oro dei Renegades',
+      'Corona della Luce Divina'
     ],
     ring: [
       'Sigillo della Grazia Divina',
@@ -116,10 +120,11 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
   },
   rogue: {
     weapon: [
-      'Pugnali di Mithral dei Bassifondi',
-      'Stocco Rapido dell’Assassino',
+      'Doppi Pugnali di Mithral',
       'Daghe Avvelenate della Notte',
-      'Arco Corto del Predatore Silenzioso'
+      'Arco Composito del Predatore',
+      'Arco Lungo da Caccia',
+      'Stiletti Gemelli dell’Ombra'
     ],
     armor: [
       'Giustacuore di Cuoio Borchiato',
@@ -142,8 +147,9 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
   cleric: {
     weapon: [
       'Mazza Ferrata del Tempio',
-      'Flagello Sacro della Redenzione',
-      'Maglio del Guardiano dei Sepolcri'
+      'Grande Bastone delle Tempeste',
+      'Maglio Sacro dei Giusti',
+      'Flagello Divino dell’Alba'
     ],
     armor: [
       'Vestimento Consacrato della Trama',
@@ -294,13 +300,98 @@ export function generateItem(slot: ItemSlot, ilvl: number, rarity: ItemRarity, c
     finalName += ' ' + DND_AFFIX_SUFFIXES[mainAffix];
   }
 
-  const icons: Record<ItemSlot, string> = {
-    weapon: classId === 'wizard' ? '🪄' : (classId === 'rogue' ? '🗡️' : (classId === 'cleric' ? '🔨' : '⚔️')),
-    armor: classId === 'wizard' ? '🥋' : '🛡️',
-    helm: classId === 'wizard' ? '👑' : '🪖',
-    ring: '💍',
-    relic: '📜'
-  };
+  let modelType: WeaponModelType | undefined;
+  let helmType: HelmModelType | undefined;
+  let armorType: ArmorModelType | undefined;
+  let weaponStyle: WeaponStyle | undefined;
+
+  let icon = '📦';
+  if (slot === 'weapon') {
+    if (finalName.includes('Bipenne') || finalName.includes('Grande Ascia')) {
+      modelType = 'greataxe';
+      weaponStyle = 'greatsword_2h';
+      icon = '🪓';
+    } else if (finalName.includes('Ascia')) {
+      modelType = 'axe';
+      weaponStyle = 'sword_shield';
+      icon = '🪓';
+    } else if (finalName.includes('Doppie Spade')) {
+      modelType = 'dual_swords';
+      weaponStyle = 'dual_swords';
+      icon = '⚔️';
+    } else if (finalName.includes('Spadone')) {
+      modelType = 'greatsword';
+      weaponStyle = 'greatsword_2h';
+      icon = '🗡️';
+    } else if (finalName.includes('Pugnal') || finalName.includes('Dagh') || finalName.includes('Stilett')) {
+      modelType = 'dual_daggers';
+      weaponStyle = 'dual_daggers';
+      icon = '🗡️';
+    } else if (finalName.includes('Arco')) {
+      modelType = 'bow';
+      weaponStyle = 'bow';
+      icon = '🏹';
+    } else if (finalName.includes('Bacchetta') || finalName.includes('Tomo')) {
+      modelType = 'wand_tome';
+      weaponStyle = 'wand_tome';
+      icon = '🪄';
+    } else if (finalName.includes('Bastone') && (classId === 'cleric' || finalName.includes('Tempeste'))) {
+      modelType = 'staff_holy';
+      weaponStyle = 'staff_holy';
+      icon = '⚡';
+    } else if (finalName.includes('Bastone') || finalName.includes('Verga') || finalName.includes('Scettro')) {
+      modelType = 'staff';
+      weaponStyle = 'staff_2h';
+      icon = '🔮';
+    } else if (finalName.includes('Maglio') || finalName.includes('Martello')) {
+      modelType = 'hammer';
+      weaponStyle = 'greatsword_2h';
+      icon = '🔨';
+    } else if (finalName.includes('Mazza') || finalName.includes('Flagello')) {
+      modelType = 'mace';
+      weaponStyle = 'mace_shield';
+      icon = '🔨';
+    } else {
+      modelType = 'sword';
+      weaponStyle = 'sword_shield';
+      icon = '⚔️';
+    }
+  } else if (slot === 'helm') {
+    if (finalName.includes('Cappello') || finalName.includes('Diadema')) {
+      helmType = 'mage_hat';
+      icon = '🧙';
+    } else if (finalName.includes('Cappuccio') || finalName.includes('Maschera')) {
+      helmType = 'assassin_hood';
+      icon = '🥷';
+    } else if (finalName.includes('Corona')) {
+      helmType = 'crown';
+      icon = '👑';
+    } else if (finalName.includes('Cornuto')) {
+      helmType = 'horned_helm';
+      icon = '🪖';
+    } else {
+      helmType = 'knight_helm';
+      icon = '🪖';
+    }
+  } else if (slot === 'armor') {
+    if (finalName.includes('Veste') || finalName.includes('Tonaca') || finalName.includes('Robe')) {
+      armorType = 'mage_robes';
+      icon = '🥋';
+    } else if (finalName.includes('Cuoio') || finalName.includes('Garb')) {
+      armorType = 'leather_tunic';
+      icon = '🦺';
+    } else if (finalName.includes('Cotta')) {
+      armorType = 'chainmail';
+      icon = '🛡️';
+    } else {
+      armorType = 'heavy_plate';
+      icon = '🛡️';
+    }
+  } else if (slot === 'ring') {
+    icon = '💍';
+  } else if (slot === 'relic') {
+    icon = '📜';
+  }
 
   const goldValue = Math.round((12 + ilvl * 8) * rar.mult);
 
@@ -311,9 +402,13 @@ export function generateItem(slot: ItemSlot, ilvl: number, rarity: ItemRarity, c
     rarity,
     ilvl,
     stats,
-    icon: icons[slot],
+    icon,
     goldValue,
-    isNew: true
+    isNew: true,
+    modelType,
+    weaponStyle,
+    helmType,
+    armorType
   };
 }
 

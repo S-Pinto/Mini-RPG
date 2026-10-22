@@ -2,7 +2,7 @@
 // The Albedo Renegades: Shadow of Elanthria
 
 import * as THREE from 'three';
-import type { DestructibleProp, ZoneConfig } from '../types/game.ts';
+import type { DestructibleProp, ZoneConfig, RoomType } from '../types/game.ts';
 import { GEO, getLambert, getBasic, buildPropModel } from '../graphics/proceduralModels.ts';
 
 export const TILE_SIZE = 2.0;
@@ -21,7 +21,7 @@ export type RoomShape = 'quadrant_sanctuary' | 'twin_crypts' | 'winding_catacomb
 export interface DungeonRoom {
   x: number;
   y: number;
-  type: 'start' | 'normal' | 'treasure' | 'shrine' | 'boss';
+  type: RoomType;
   shape?: RoomShape;
   doors: Partial<Record<'n' | 's' | 'e' | 'w', DungeonRoom>>;
   cleared: boolean;
@@ -33,6 +33,8 @@ export interface DungeonRoom {
   enemiesSpawned: boolean;
   bars: THREE.Group[];
   torches: THREE.Mesh[];
+  waypointName?: string;
+  waypointUnlocked?: boolean;
 }
 
 export class DungeonGenerator {
@@ -43,8 +45,8 @@ export class DungeonGenerator {
     const key = (x: number, y: number) => `${x},${y}`;
 
     const start: DungeonRoom = {
-      x: 2,
-      y: 2,
+      x: 4,
+      y: 4,
       type: 'start',
       doors: {},
       cleared: true,
@@ -55,14 +57,16 @@ export class DungeonGenerator {
       props: [],
       enemiesSpawned: true,
       bars: [],
-      torches: []
+      torches: [],
+      waypointName: 'Portale Iniziale',
+      waypointUnlocked: true
     };
 
     const rooms: DungeonRoom[] = [start];
-    map.set(key(2, 2), start);
+    map.set(key(4, 4), start);
 
     let guard = 0;
-    while (rooms.length < roomTarget && guard++ < 800) {
+    while (rooms.length < roomTarget && guard++ < 1200) {
       const parent = rooms[Math.floor(Math.random() * rooms.length)];
       const dirs: [number, number, 'n' | 's' | 'e' | 'w', 'n' | 's' | 'e' | 'w'][] = [
         [0, -1, 'n', 's'],
@@ -74,13 +78,13 @@ export class DungeonGenerator {
       for (const [dx, dy, fromDir, toDir] of dirs) {
         const nx = parent.x + dx;
         const ny = parent.y + dy;
-        if (nx < 0 || ny < 0 || nx >= 5 || ny >= 5 || map.has(key(nx, ny))) continue;
+        if (nx < 0 || ny < 0 || nx >= 9 || ny >= 9 || map.has(key(nx, ny))) continue;
 
         let neighborCount = 0;
         for (const [cx, cy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
           if (map.has(key(nx + cx, ny + cy))) neighborCount++;
         }
-        if (neighborCount > 1 && Math.random() < 0.8) continue;
+        if (neighborCount > 1 && Math.random() < 0.65) continue;
 
         const newR: DungeonRoom = {
           x: nx,
@@ -109,18 +113,45 @@ export class DungeonGenerator {
     // Determine special rooms (Boss, Treasure, Shrine)
     const deadEnds = rooms.filter(r => r !== start && Object.keys(r.doors).length === 1);
     const available = deadEnds.length > 0 ? deadEnds : rooms.filter(r => r !== start);
-
+    // 1. Place boss at furthest room from start
+    let bossRoom: DungeonRoom = rooms[rooms.length - 1];
     if (available.length > 0) {
-      const bossRoom = available.pop() || rooms[rooms.length - 1];
+      bossRoom = available.shift() || rooms[rooms.length - 1];
       bossRoom.type = 'boss';
     }
+
+    // 2. Pre-Boss Checkpoint / Teleport Room:
+    // Always the room directly connected before the boss room (so at least 2 checkpoints: start + pre-boss)
+    const preBossNeighbor = Object.values(bossRoom.doors)[0];
+    if (preBossNeighbor && preBossNeighbor !== start) {
+      preBossNeighbor.type = 'checkpoint';
+      preBossNeighbor.cleared = true;
+      preBossNeighbor.waypointName = 'Santuario del Boss';
+    } else if (available.length > 0) {
+      const cp = available.shift()!;
+      cp.type = 'checkpoint';
+      cp.cleared = true;
+      cp.waypointName = 'Santuario della Soglia';
+    }
+
+    // 3. Shop room (has teleport pad & equipment merchant)
     if (available.length > 0) {
-      const treasureRoom = available.pop()!;
+      const shopRoom = available.shift()!;
+      shopRoom.type = 'shop';
+      shopRoom.cleared = true;
+      shopRoom.waypointName = 'Emporio del Mercante';
+    }
+
+    // 4. Treasure room (Skill Augments Crucible)
+    if (available.length > 0) {
+      const treasureRoom = available.shift()!;
       treasureRoom.type = 'treasure';
       treasureRoom.cleared = true;
     }
+
+    // 5. Shrine room
     if (available.length > 0) {
-      const shrineRoom = available.pop()!;
+      const shrineRoom = available.shift()!;
       shrineRoom.type = 'shrine';
       shrineRoom.cleared = true;
     }
@@ -313,20 +344,63 @@ export class DungeonGenerator {
 
   private populateProps(r: DungeonRoom): void {
     let propSeq = 0;
-    if (r.type === 'treasure') {
-      const spot = this.findFreeSpot(r, 0, 0, 0);
+
+    if (r.type === 'start') {
+      // Starting room teleport pad
       r.props.push({
         id: ++propSeq,
-        x: spot.x,
-        y: spot.y,
-        type: 'chest',
-        hp: 1,
+        x: WORLD_W / 2,
+        y: WORLD_H / 2,
+        type: 'teleport_pad',
+        hp: 9999
+      });
+    } else if (r.type === 'checkpoint') {
+      // Pre-boss / waypoint room teleport pad
+      r.props.push({
+        id: ++propSeq,
+        x: WORLD_W / 2,
+        y: WORLD_H / 2,
+        type: 'teleport_pad',
+        hp: 9999
+      });
+      for (let i = 0; i < 2; i++) {
+        const s = this.findFreeSpot(r, WORLD_W / 2, WORLD_H / 2, 2.5);
+        r.props.push({ id: ++propSeq, x: s.x, y: s.y, type: 'pot', hp: 10 });
+      }
+    } else if (r.type === 'shop') {
+      // Merchant Shop room: Teleport Pad + Merchant Counter
+      r.props.push({
+        id: ++propSeq,
+        x: WORLD_W / 2 - 2.8,
+        y: WORLD_H / 2,
+        type: 'teleport_pad',
+        hp: 9999
+      });
+      r.props.push({
+        id: ++propSeq,
+        x: WORLD_W / 2 + 1.8,
+        y: WORLD_H / 2,
+        type: 'shop_counter',
+        hp: 9999
+      });
+      const clutter = ['crate', 'barrel', 'pot'] as const;
+      for (let i = 0; i < 3; i++) {
+        const s = this.findFreeSpot(r, WORLD_W / 2, WORLD_H / 2, 2.2);
+        r.props.push({ id: ++propSeq, x: s.x, y: s.y, type: clutter[i % clutter.length], hp: 10 });
+      }
+    } else if (r.type === 'treasure') {
+      // Altare della Maestria delle Abilità (Skill Augments Crucible)
+      r.props.push({
+        id: ++propSeq,
+        x: WORLD_W / 2,
+        y: WORLD_H / 2,
+        type: 'skill_crucible',
+        hp: 9999,
         opened: false
       });
-      // Vault treasures: ornate urns and stacked crates
       const clutter = ['crate', 'pot', 'barrel', 'pot'] as const;
       for (let i = 0; i < 4; i++) {
-        const s = this.findFreeSpot(r, spot.x, spot.y, 1.8);
+        const s = this.findFreeSpot(r, WORLD_W / 2, WORLD_H / 2, 2.2);
         r.props.push({
           id: ++propSeq,
           x: s.x,

@@ -91,6 +91,24 @@ class SoundEngine {
     this.playTone(320, 0.12, 'sawtooth', 0.08, 90);
   }
 
+  public heavyChop(): void {
+    // Deep heavy vertical cleave
+    this.playTone(210, 0.18, 'sawtooth', 0.13, 50);
+    this.playTone(110, 0.22, 'square', 0.09, 35, 0.03);
+  }
+
+  public thrust(): void {
+    // Sharp fast piercing thrust
+    this.playTone(540, 0.09, 'sawtooth', 0.11, 140);
+    this.playTone(760, 0.07, 'triangle', 0.09, 240);
+  }
+
+  public mageBlast(): void {
+    // Arcane burst with magic snap and resonant pulse
+    this.playTone(620, 0.13, 'sine', 0.12, 180);
+    this.playTone(320, 0.22, 'triangle', 0.13, 70, 0.02);
+  }
+
   public smite(): void {
     // Divine smite: thunder crack + sacred ringing chime
     this.playTone(180, 0.35, 'sawtooth', 0.16, 40);
@@ -107,6 +125,16 @@ class SoundEngine {
   public shootArrow(): void {
     // Sharp twang
     this.playTone(880, 0.06, 'triangle', 0.08, 220);
+  }
+
+  public explosion(): void {
+    this.playTone(180, 0.25, 'sawtooth', 0.15, 45);
+    this.playTone(60, 0.5, 'square', 0.25, 20, 0.05);
+  }
+
+  public lightning(): void {
+    this.playTone(950, 0.12, 'sawtooth', 0.15, 300);
+    this.playTone(1400, 0.08, 'square', 0.1, 400, 0.03);
   }
 
   public heal(): void {
@@ -131,6 +159,15 @@ class SoundEngine {
 
   public dash(): void {
     this.playTone(320, 0.16, 'sine', 0.09, 580);
+  }
+
+  public teleport(): void {
+    this.playTone(280, 0.28, 'sine', 0.12, 750);
+    this.playTone(560, 0.32, 'triangle', 0.09, 1120, 0.08);
+  }
+
+  public skill(): void {
+    this.teleport();
   }
 
   public coin(): void {

@@ -249,6 +249,7 @@ export class Enemy {
   public isCharging = false;
   public chargeDirX = 0;
   public chargeDirY = 0;
+  public attackCount = 0;
 
   public mesh: THREE.Group;
   private modelUpdate: (t: number, speed: number, attackProgress?: number) => void;
