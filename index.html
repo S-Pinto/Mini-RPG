@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <title>The Albedo Renegades: Shadow of Elanthria</title>
+    <meta name="description" content="RPG Roguelike 3D ambientato nell'Isola di Okkarn. Classi D&D, abilità con cooldown, drop intuitivi e combattimenti epici." />
+    <!-- Google Fonts: Fantasy & Modern Gaming Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=MedievalSharp&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/src/style.css">
+  </head>
+  <body>
+    <div id="game-container">
+      <!-- 3D WebGL Canvas -->
+      <canvas id="stage-canvas"></canvas>
+
+      <!-- Combat Floating Text Container -->
+      <div id="combat-text-container"></div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!--  TOP HUD (Vitals, Zone Badge, Stats, Quick Tools)    -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <header id="hud-top">
+        <!-- Character vitals & portrait -->
+        <div id="hud-char-section" class="hud-panel">
+          <div class="hud-title-row">
+            <span id="hud-char-name">Paladino</span>
+            <span id="hud-level-text">Liv. 1</span>
+          </div>
+          <div class="bar-container hp-bar">
+            <div id="hud-hp-fill" class="bar-fill hp-fill"></div>
+            <span id="hud-hp-text" class="bar-text">140 / 140 PV</span>
+          </div>
+          <div class="bar-container xp-bar">
+            <div id="hud-xp-fill" class="bar-fill xp-fill"></div>
+            <span id="hud-xp-text" class="xp-overlay-text">0 / 25 EXP</span>
+          </div>
+        </div>
+
+        <!-- Zone name badge -->
+        <div id="hud-zone-badge" class="hud-panel">
+          <span class="zone-icon">📍</span>
+          <span id="hud-zone-text">Azren · Le Macerie della Milizia</span>
+        </div>
+
+        <!-- Gold, Minimap & Control Buttons -->
+        <div id="hud-stats-section" class="hud-panel">
+          <div class="gold-badge">
+            <span class="gold-icon">💰</span>
+            <span id="hud-gold-text">0 Oro</span>
+          </div>
+          <canvas id="minimap-canvas" width="70" height="70" title="Mappa del Dungeon"></canvas>
+          <div id="hud-quick-buttons">
+            <button id="btn-open-inv" class="hud-btn" title="Apri Zaino e Scheda (Tab / I)">🎒</button>
+            <button id="btn-toggle-sound" class="hud-btn" title="Attiva/Disattiva Suono (M)">🔊</button>
+            <button id="btn-toggle-pause" class="hud-btn" title="Pausa (P / ESC)">⏸️</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!--  BOSS HEALTH BAR                                    -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div id="hud-boss-bar">
+        <div class="boss-title-row">
+          <span class="boss-skull">💀</span>
+          <span id="hud-boss-name">Vermithrax, Terrore di Elanthria</span>
+          <span id="hud-boss-hp-pct" class="boss-pct">100%</span>
+        </div>
+        <div class="bar-container boss-bar-inner">
+          <div id="hud-boss-fill" class="bar-fill boss-fill"></div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!--  MODERN COMBAT ACTION BAR (Desktop)                -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div id="desktop-skill-bar">
+        <!-- Attack Slot -->
+        <div class="skill-chip skill-chip-attack" id="dsk-attack">
+          <div class="skill-chip-icon">⚔️</div>
+          <div class="skill-chip-body">
+            <div class="skill-chip-key">[ Clic SX / Spazio ]</div>
+            <div class="skill-chip-name" id="dsk-attack-name">Attacco Base</div>
+          </div>
+          <div class="skill-chip-cd-overlay" id="dsk-attack-cd"></div>
+        </div>
+
+        <!-- Skill 1 Slot -->
+        <div class="skill-chip skill-chip-slot" id="dsk-skill1">
+          <div class="skill-chip-icon" id="dsk-s1-icon">⚡</div>
+          <div class="skill-chip-body">
+            <div class="skill-chip-key">[ 1 ] / [ Q / Clic DX ]</div>
+            <div class="skill-chip-name" id="dsk-s1-name">Abilità 1</div>
+          </div>
+          <div class="skill-chip-timer" id="dsk-s1-timer"></div>
+          <div class="skill-chip-cd-overlay" id="dsk-s1-cd"></div>
+        </div>
+
+        <!-- Skill 2 Slot -->
+        <div class="skill-chip skill-chip-slot" id="dsk-skill2">
+          <div class="skill-chip-icon" id="dsk-s2-icon">💨</div>
+          <div class="skill-chip-body">
+            <div class="skill-chip-key">[ 2 ] / [ E ]</div>
+            <div class="skill-chip-name" id="dsk-s2-name">Abilità 2</div>
+          </div>
+          <div class="skill-chip-timer" id="dsk-s2-timer"></div>
+          <div class="skill-chip-cd-overlay" id="dsk-s2-cd"></div>
+        </div>
+
+        <!-- Dash / Dodge Slot -->
+        <div class="skill-chip skill-chip-dash" id="dsk-dash">
+          <div class="skill-chip-icon">🏃</div>
+          <div class="skill-chip-body">
+            <div class="skill-chip-key">[ Shift ]</div>
+            <div class="skill-chip-name">Schivata</div>
+          </div>
+          <div class="skill-chip-cd-overlay" id="dsk-dash-cd"></div>
+        </div>
+
+        <!-- Quick Healing Potion Slot -->
+        <div class="skill-chip skill-chip-potion" id="dsk-potion">
+          <div class="skill-chip-icon">🧪</div>
+          <div class="skill-chip-body">
+            <div class="skill-chip-key">[ R / Clic ]</div>
+            <div class="skill-chip-name">Pozione Cura</div>
+          </div>
+          <div class="potion-count-badge" id="dsk-potion-count">x2</div>
+          <div class="skill-chip-cd-overlay" id="dsk-potion-cd"></div>
+        </div>
+
+        <!-- Inventory Slot -->
+        <div class="skill-chip skill-chip-inv" id="dsk-inv">
+          <div class="skill-chip-icon">🎒</div>
+          <div class="skill-chip-body">
+            <div class="skill-chip-key">[ Tab / I ]</div>
+            <div class="skill-chip-name">Zaino &amp; Scheda</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!--  MOBILE TOUCH CONTROLS                              -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div id="mobile-touch-controls">
+        <!-- Left: Virtual Joystick -->
+        <div id="touch-stick-zone">
+          <div id="touch-knob"></div>
+        </div>
+
+        <!-- Right: Action Buttons Cluster -->
+        <div id="touch-action-buttons">
+          <!-- Quick Potion -->
+          <button id="btn-potion" class="touch-btn potion-btn" aria-label="Pozione">
+            <span class="touch-btn-icon">🧪</span>
+            <span class="touch-btn-key" id="mob-potion-count">x2</span>
+          </button>
+          <!-- Dash -->
+          <button id="btn-dash" class="touch-btn dash-btn" aria-label="Scatto">
+            <span class="touch-btn-icon">💨</span>
+            <span class="touch-btn-key">SCATTO</span>
+          </button>
+          <!-- Skill 2 -->
+          <button id="btn-skill2" class="touch-btn skill2-btn" aria-label="Abilità 2">
+            <span class="touch-btn-icon" id="mob-s2-icon">⚡</span>
+            <span class="touch-btn-key" id="mob-s2-name">ABI 2</span>
+            <span class="touch-btn-timer" id="mob-s2-timer"></span>
+            <div class="touch-cd-ring" id="mob-s2-cd"></div>
+          </button>
+          <!-- Skill 1 -->
+          <button id="btn-skill1" class="touch-btn skill1-btn" aria-label="Abilità 1">
+            <span class="touch-btn-icon" id="mob-s1-icon">⚔️</span>
+            <span class="touch-btn-key" id="mob-s1-name">ABI 1</span>
+            <span class="touch-btn-timer" id="mob-s1-timer"></span>
+            <div class="touch-cd-ring" id="mob-s1-cd"></div>
+          </button>
+          <!-- Attack (Big Button) -->
+          <button id="btn-attack" class="touch-btn attack-btn" aria-label="Attacco">
+            <span class="touch-btn-icon">⚔️</span>
+            <span class="touch-btn-key">ATTACCO</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!--  MODAL OVERLAYS (Intro, Lore, Guide, Compendium)    -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div id="modal-overlay">
+
+        <!-- 0. CLEAN INTRO / MAIN MENU (Only 4 requested buttons) -->
+        <div id="panel-intro" class="modal-panel">
+          <div class="intro-clean-card">
+            <div class="intro-crest">🐉</div>
+            <h1 class="main-title">THE ALBEDO<br><span class="title-accent">RENEGATES</span></h1>
+            <h2 class="sub-title">Shadow of Elanthria</h2>
+            <p class="tagline">Roguelike Action RPG 3D · Regole &amp; Classi D&amp;D 5e</p>
+
+            <div class="intro-clean-buttons">
+              <button id="intro-btn-new" class="clean-menu-btn primary">
+                <span class="clean-menu-icon">⚔️</span>
+                <span class="clean-menu-text">Nuova Partita</span>
+              </button>
+              <button id="intro-btn-leaderboard" class="clean-menu-btn">
+                <span class="clean-menu-icon">🏆</span>
+                <span class="clean-menu-text">Classifica</span>
+              </button>
+              <button id="intro-btn-guide" class="clean-menu-btn">
+                <span class="clean-menu-icon">📜</span>
+                <span class="clean-menu-text">Comandi &amp; Guida</span>
+              </button>
+              <button id="intro-btn-settings" class="clean-menu-btn">
+                <span class="clean-menu-icon">⚙️</span>
+                <span class="clean-menu-text">Impostazioni</span>
+              </button>
+            </div>
+
+            <div class="intro-footer-note">
+              <span>Isola di Okkarn · Versione 1.4</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 0B. LEADERBOARD MODAL -->
+        <div id="panel-leaderboard" class="modal-panel">
+          <div class="modal-box-wide">
+            <h2 class="modal-title">🏆 CLASSIFICA DEI RENEGADES</h2>
+            <p class="modal-subtitle">Le più gloriose imprese dei campioni registrate su Okkarn</p>
+            <div id="leaderboard-table-container" class="leaderboard-container"></div>
+            <div class="modal-footer-actions">
+              <button id="btn-clear-leaderboard" class="btn-clear-scores">🗑️ Azzera Classifica</button>
+              <button id="btn-back-from-leaderboard" class="btn-back">⬅️ Torna al Menu Principale</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 0C. SETTINGS MODAL -->
+        <div id="panel-settings" class="modal-panel">
+          <div class="modal-box-wide settings-box">
+            <h2 class="modal-title">⚙️ IMPOSTAZIONI DI GIOCO</h2>
+            <p class="modal-subtitle">Personalizza audio, volume, scuotimento e grafica</p>
+
+            <div class="settings-grid">
+              <div class="setting-item">
+                <div class="setting-info">
+                  <span class="setting-name">🔊 Effetti Sonori (SFX)</span>
+                  <span class="setting-desc">Suoni delle armi, colpi, abilità e mostri</span>
+                </div>
+                <div class="setting-control">
+                  <input type="range" id="setting-sfx-vol" min="0" max="100" value="80" class="setting-slider" />
+                  <span id="setting-sfx-val" class="setting-val">80%</span>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <span class="setting-name">🎵 Musica &amp; Atmosfera</span>
+                  <span class="setting-desc">Colonna sonora procedurale synth di Okkarn</span>
+                </div>
+                <div class="setting-control">
+                  <input type="range" id="setting-music-vol" min="0" max="100" value="50" class="setting-slider" />
+                  <span id="setting-music-val" class="setting-val">50%</span>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <span class="setting-name">💥 Scuotimento Schermo</span>
+                  <span class="setting-desc">Feedback visivo dinamico nei colpi critici</span>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="setting-screenshake" checked />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <span class="setting-name">✨ Qualità Particelle</span>
+                  <span class="setting-desc">Densità scintille magiche e fiamme</span>
+                </div>
+                <div class="setting-control">
+                  <select id="setting-particles" class="setting-select">
+                    <option value="high" selected>Alta (Dinamica)</option>
+                    <option value="medium">Media</option>
+                    <option value="low">Bassa</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <span class="setting-name">🔢 Numeri Danno Fluttuanti</span>
+                  <span class="setting-desc">Mostra il valore dei danni inflitti sopra i nemici</span>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="setting-damage-numbers" checked />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer-actions">
+              <button id="btn-save-settings" class="btn-save-settings">💾 Salva &amp; Torna al Menu</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 0C. CONTROLS & GAMEPLAY GUIDE -->
+        <div id="panel-guide" class="modal-panel">
+          <div class="modal-box-wide">
+            <h2 class="modal-title">🎮 COMANDI &amp; MECCANICHE DI GIOCO</h2>
+            <p class="modal-subtitle">Guida Completa al Combattimento e ai Drop</p>
+
+            <div class="guide-columns">
+              <div class="guide-col">
+                <h3>⌨️ Controlli PC (Tastiera &amp; Mouse)</h3>
+                <ul class="guide-list">
+                  <li><b>WASD / Frecce:</b> Movimento dell'eroe</li>
+                  <li><b>Mouse + Clic SX / Spazio:</b> Mira &amp; Attacco Base</li>
+                  <li><b>Tasto [ 1 ] o [ Q ] / Clic DX:</b> Abilità 1 di Classe (es. Punizione Divina)</li>
+                  <li><b>Tasto [ 2 ] o [ E ]:</b> Abilità 2 / Mobilità Speciale (es. Scudo, Teletrasporto)</li>
+                  <li><b>Tasto [ Shift ]:</b> Scatto &amp; Schivata rapida</li>
+                  <li><b>Tasto [ R ]:</b> Bevi Pozione di Cura rapida (+45% PV)</li>
+                  <li><b>Tasto [ Tab ] o [ I ]:</b> Apri Zaino, Equipaggiamento e Scheda D&amp;D</li>
+                  <li><b>Tasto [ P ] / [ ESC ]:</b> Pausa di Gioco</li>
+                </ul>
+              </div>
+
+              <div class="guide-col">
+                <h3>📱 Controlli Mobile (Touchscreen)</h3>
+                <ul class="guide-list">
+                  <li><b>Joystick Virtuale a Sinistra:</b> Movimento fluido con auto-mira intelligente</li>
+                  <li><b>Pulsante ATTACCO:</b> Attacco dell'arma impugnata</li>
+                  <li><b>Pulsanti ABI 1 &amp; ABI 2:</b> Icone con anelli di cooldown in tempo reale</li>
+                  <li><b>Pulsante SCATTO:</b> Schivata per evitare le aree rosse nemiche</li>
+                  <li><b>Pulsante POZIONE:</b> Cura istantanea con contatore dosi</li>
+                </ul>
+
+                <h3 style="margin-top:16px">💎 Sistema Drop Intuitivi</h3>
+                <ul class="guide-list">
+                  <li><b style="color:#00ffee">✨ Sfere di Esperienza (EXP):</b> Cristalli rotanti che aumentano il livello D&amp;D</li>
+                  <li><b style="color:#ff4466">🧪 Pozioni Curative:</b> Boccette rosse che ripristinano il 45% di salute</li>
+                  <li><b style="color:#ffd700">💰 Monete d'Oro:</b> Servono nei santuari e forzieri</li>
+                  <li><b style="color:#b366ff">🗡️ Armi &amp; Armature:</b> Raggi di luce colorati verticali con nome e rarità visibile a distanza!</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="modal-footer-actions">
+              <button id="btn-back-from-guide" class="btn-back">⬅️ Torna al Menu Principale</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 0D. CLASS COMPENDIUM -->
+        <div id="panel-classes-compendium" class="modal-panel">
+          <div class="modal-box-wide">
+            <h2 class="modal-title">🛡️ COMPENDIO DELLE CLASSI D&amp;D</h2>
+            <p class="modal-subtitle">Scopri i 5 eroi e le loro abilità esclusive</p>
+
+            <div class="compendium-grid" id="compendium-cards-list"></div>
+
+            <div class="modal-footer-actions">
+              <button id="btn-back-from-compendium" class="btn-back">⬅️ Torna al Menu Principale</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 1. Class & Subclass Selection Modal -->
+        <div id="panel-class-select" class="modal-panel">
+          <div class="campaign-header">
+            <h1 class="main-title">SCEGLI IL TUO EROE</h1>
+            <h2 class="sub-title">The Albedo Renegades: Shadow of Elanthria</h2>
+            <p class="campaign-lore">
+              Seleziona la tua classe e la sottoclasse D&amp;D per iniziare la tua discesa nell'isola di <b>Okkarn</b>.
+            </p>
+          </div>
+          <div id="class-cards-container" class="cards-grid"></div>
+          <div class="modal-footer-actions">
+            <button id="btn-back-from-class-select" class="btn-back">⬅️ Torna al Menu Principale</button>
+          </div>
+        </div>
+
+        <!-- 2. D&D Feats Level-Up Card Selection -->
+        <div id="panel-level-up" class="modal-panel">
+          <h2 id="level-up-title" class="modal-title">AVANZAMENTO DI LIVELLO</h2>
+          <p class="modal-subtitle">Seleziona un Talento D&amp;D per rafforzare il tuo eroe nella discesa.</p>
+          <div id="feat-cards-container" class="feats-grid"></div>
+        </div>
+
+        <!-- 3. Inventory & Character Sheet -->
+        <div id="panel-inventory" class="modal-panel"></div>
+
+        <!-- 4. Messages (Victory / Death / Pause) -->
+        <div id="panel-message" class="modal-panel"></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,327 @@
+// D&D 5e Classic Equipment, Rarities and Procedural Generation
+// The Albedo Renegades: Shadow of Elanthria
+
+import type { Item, ItemRarity, ItemSlot, CharacterStats, ClassId } from '../types/game.ts';
+
+export const RARITIES: Record<ItemRarity, { name: string; color: string; hex: number; affixCount: number; mult: number }> = {
+  common: { name: 'Comune', color: '#b0a8c0', hex: 0xb0a8c0, affixCount: 0, mult: 1.0 },
+  uncommon: { name: 'Non comune', color: '#44d98a', hex: 0x44d98a, affixCount: 1, mult: 1.25 },
+  rare: { name: 'Raro', color: '#44aaff', hex: 0x44aaff, affixCount: 2, mult: 1.55 },
+  epic: { name: 'Molto raro', color: '#b366ff', hex: 0xb366ff, affixCount: 3, mult: 1.9 },
+  legendary: { name: 'Leggendario', color: '#ffaa33', hex: 0xffaa33, affixCount: 4, mult: 2.3 }
+};
+
+export const STAT_LABELS_IT: Record<keyof CharacterStats, string> = {
+  hp: 'Punti Ferita',
+  maxHp: 'PV Massimi',
+  damage: 'Danno d’Attacco',
+  armor: 'Classe Armatura',
+  speed: 'Velocità di Movimento',
+  attackDelay: 'Intervallo Attacco',
+  critChance: 'Prob. Colpo Critico',
+  critDamage: 'Danno Critico',
+  hpRegen: 'Rigenerazione PV',
+  lifesteal: 'Vampirismo / Rubavita',
+  cooldownReduction: 'Riduzione Ricarica',
+  spellPower: 'Potere Magico',
+  luck: 'Fortuna nel Bottino',
+  strength: 'Forza',
+  dexterity: 'Destrezza',
+  constitution: 'Costituzione',
+  intelligence: 'Intelligenza',
+  wisdom: 'Saggezza'
+};
+
+const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
+  wizard: {
+    weapon: [
+      'Bastone dell’Arcimago',
+      'Verga del Fuoco Arcano',
+      'Bacchetta di Cristallo Puro',
+      'Scettro della Trama di Elshiff',
+      'Bastone delle Tempeste Astrali'
+    ],
+    armor: [
+      'Veste della Trama di Elshiff',
+      'Tonaca della Meditazione Arcana',
+      'Mantello del Mago Guerriero',
+      'Robe Tessute di Stelle'
+    ],
+    helm: [
+      'Diadema Arcano di Cristallo',
+      'Cappuccio dell’Ombra Astrale',
+      'Corona della Mente Chiara'
+    ],
+    ring: [
+      'Anello del Maestro d’Incanti',
+      'Sigillo della Concentrazione',
+      'Anello di Rubino Astrale'
+    ],
+    relic: [
+      'Grimorio delle Fiamme Antiche',
+      'Pietra di Ioun dell’Intelletto',
+      'Tomo Proibito di Elshiff'
+    ]
+  },
+  fighter: {
+    weapon: [
+      'Spadone a Due Mani dei Renegades',
+      'Grande Ascia di Azren',
+      'Maglio Frantuma-Ossa',
+      'Spada Bastarda di Acciaio Valiriano'
+    ],
+    armor: [
+      'Corazza a Piastre del Cavaliere',
+      'Armatura di Piastre Pesanti',
+      'Cotta di Maglia Rinforzata'
+    ],
+    helm: [
+      'Grande Elmo di Ferro',
+      'Elmo Cornuto del Guerriero',
+      'Maschera della Milizia di Azren'
+    ],
+    ring: [
+      'Fascia del Berserker',
+      'Anello del Colpo Devastante'
+    ],
+    relic: [
+      'Stendardo di Guerra della Milizia',
+      'Cuore di Ferro di Azren'
+    ]
+  },
+  paladin: {
+    weapon: [
+      'Spada Lunga Benedetta',
+      'Lama della Punizione Divina',
+      'Martello Sacro dell’Alba',
+      'Spada Radiosa dei Renegades'
+    ],
+    armor: [
+      'Armatura a Piastre Consacrata',
+      'Corazza dell’Alba Radiosa',
+      'Pettorale della Giustizia Divina'
+    ],
+    helm: [
+      'Elmo del Guardiano Divino',
+      'Celata d’Oro dei Renegades'
+    ],
+    ring: [
+      'Sigillo della Grazia Divina',
+      'Anello della Luce Incorruttibile'
+    ],
+    relic: [
+      'Icona Sacra dell’Alba',
+      'Reliquiario della Fede Incrollabile'
+    ]
+  },
+  rogue: {
+    weapon: [
+      'Pugnali di Mithral dei Bassifondi',
+      'Stocco Rapido dell’Assassino',
+      'Daghe Avvelenate della Notte',
+      'Arco Corto del Predatore Silenzioso'
+    ],
+    armor: [
+      'Giustacuore di Cuoio Borchiato',
+      'Garb delle Ombre di Azren',
+      'Veste del Predatore Furtivo'
+    ],
+    helm: [
+      'Cappuccio dell’Assassino',
+      'Maschera delle Tenebre'
+    ],
+    ring: [
+      'Anello del Passo Silenzioso',
+      'Fascia del Ladro Letale'
+    ],
+    relic: [
+      'Fiala del Veleno Antico',
+      'Moneta Fortunata dei Renegades'
+    ]
+  },
+  cleric: {
+    weapon: [
+      'Mazza Ferrata del Tempio',
+      'Flagello Sacro della Redenzione',
+      'Maglio del Guardiano dei Sepolcri'
+    ],
+    armor: [
+      'Vestimento Consacrato della Trama',
+      'Pettorale della Redenzione',
+      'Cotta Benedetta della Fede'
+    ],
+    helm: [
+      'Corona del Sacerdote di Guerra',
+      'Diadema della Grazia Spirituale'
+    ],
+    ring: [
+      'Anello della Preghiera Eterna',
+      'Sigillo della Vita Rinnovata'
+    ],
+    relic: [
+      'Icona Sacra di Elshiff',
+      'Calice Benedetto delle Anime Salve'
+    ]
+  }
+};
+
+const DND_AFFIX_SUFFIXES: Record<string, string> = {
+  damage: 'della Furia Inarrestabile',
+  armor: 'del Bastione di Pietra',
+  maxHp: 'del Vigore della Quercia',
+  speed: 'del Vento Rapido',
+  critChance: 'del Cacciatore Letale',
+  critDamage: 'della Decapitazione',
+  hpRegen: 'della Fenice Rinascente',
+  lifesteal: 'del Vampiro dell’Abisso',
+  cooldownReduction: 'della Padronanza Rapida',
+  spellPower: 'dell’Antica Trama Arcana',
+  luck: 'della Fortuna degli Dei'
+};
+
+const LEGENDARY_TITLES = [
+  'di Vermithrax il Terrore',
+  'della Regina Vaeloria',
+  'dei Renegades di Okkarn',
+  'dell’Antica Elanthria',
+  'del Campione Risvegliato'
+];
+
+let nextItemId = 1;
+
+export function generateItem(slot: ItemSlot, ilvl: number, rarity: ItemRarity, classId: ClassId = 'paladin'): Item {
+  const rar = RARITIES[rarity];
+  const classBases = CLASS_BASE_NAMES[classId] || CLASS_BASE_NAMES.paladin;
+  const bases = classBases[slot];
+  const baseName = bases[Math.floor(Math.random() * bases.length)];
+  const stats: Partial<Record<keyof CharacterStats, number>> = {};
+
+  // Base Stats tailored directly to the class archetype!
+  if (slot === 'weapon') {
+    if (classId === 'wizard') {
+      stats.damage = Math.round((3 + ilvl * 1.8) * rar.mult);
+      stats.spellPower = Math.round((8 + ilvl * 4) * rar.mult);
+      stats.cooldownReduction = Math.min(25, Math.round((4 + ilvl * 1.2) * rar.mult));
+    } else if (classId === 'rogue') {
+      stats.damage = Math.round((4 + ilvl * 2.0) * rar.mult);
+      stats.critChance = Math.round((6 + ilvl * 0.8) * (rar.mult > 1.4 ? 1.3 : 1));
+      stats.critDamage = Math.round((14 + ilvl * 3.5) * rar.mult);
+    } else if (classId === 'cleric') {
+      stats.damage = Math.round((4 + ilvl * 1.9) * rar.mult);
+      stats.spellPower = Math.round((6 + ilvl * 3) * rar.mult);
+      stats.hpRegen = Math.round((0.5 + ilvl * 0.15) * 10) / 10;
+    } else {
+      // fighter / paladin
+      stats.damage = Math.round((5 + ilvl * 2.5) * rar.mult);
+      stats.critChance = Math.round((4 + ilvl * 0.5) * (rar.mult > 1.4 ? 1.3 : 1));
+      if (classId === 'paladin') {
+        stats.spellPower = Math.round((5 + ilvl * 2) * rar.mult);
+      }
+    }
+  } else if (slot === 'armor') {
+    if (classId === 'wizard') {
+      stats.armor = Math.round((2 + ilvl * 1.0) * rar.mult);
+      stats.maxHp = Math.round((14 + ilvl * 5) * rar.mult);
+      stats.spellPower = Math.round((6 + ilvl * 3) * rar.mult);
+    } else if (classId === 'rogue') {
+      stats.armor = Math.round((3 + ilvl * 1.2) * rar.mult);
+      stats.maxHp = Math.round((12 + ilvl * 4.5) * rar.mult);
+      stats.speed = Math.round((0.3 + ilvl * 0.08) * 10) / 10;
+    } else {
+      stats.armor = Math.round((4 + ilvl * 1.8) * rar.mult);
+      stats.maxHp = Math.round((16 + ilvl * 6) * rar.mult);
+    }
+  } else if (slot === 'helm') {
+    if (classId === 'wizard') {
+      stats.armor = Math.round((1 + ilvl * 0.8) * rar.mult);
+      stats.spellPower = Math.round((5 + ilvl * 2.5) * rar.mult);
+      stats.cooldownReduction = Math.min(20, Math.round((2 + ilvl * 0.8) * rar.mult));
+    } else {
+      stats.armor = Math.round((2 + ilvl * 1.1) * rar.mult);
+      stats.maxHp = Math.round((8 + ilvl * 3.5) * rar.mult);
+    }
+  } else if (slot === 'ring') {
+    stats.critDamage = Math.round((15 + ilvl * 4) * rar.mult);
+    stats.cooldownReduction = Math.min(25, Math.round((3 + ilvl * 1.2) * rar.mult));
+    if (classId === 'wizard' || classId === 'cleric') {
+      stats.spellPower = Math.round((6 + ilvl * 3) * rar.mult);
+    }
+  } else if (slot === 'relic') {
+    stats.spellPower = Math.round((10 + ilvl * 5) * rar.mult);
+    stats.hpRegen = Math.round((0.4 + ilvl * 0.15) * 10) / 10;
+    if (classId === 'fighter' || classId === 'rogue') {
+      stats.damage = Math.round((3 + ilvl * 1.2) * rar.mult);
+    }
+  }
+
+  // Bonus Random Affixes filtered by Class suitability!
+  const classAffixPool: Record<ClassId, (keyof CharacterStats)[]> = {
+    wizard: ['spellPower', 'cooldownReduction', 'maxHp', 'armor', 'critChance', 'speed', 'hpRegen', 'luck'],
+    fighter: ['damage', 'armor', 'maxHp', 'critDamage', 'critChance', 'lifesteal', 'speed', 'luck'],
+    paladin: ['damage', 'armor', 'maxHp', 'spellPower', 'hpRegen', 'critDamage', 'cooldownReduction', 'luck'],
+    rogue: ['critChance', 'critDamage', 'speed', 'lifesteal', 'damage', 'cooldownReduction', 'luck'],
+    cleric: ['hpRegen', 'spellPower', 'armor', 'maxHp', 'cooldownReduction', 'damage', 'luck']
+  };
+
+  const pool = classAffixPool[classId] || classAffixPool.paladin;
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  let mainAffix: string | null = null;
+
+  for (let i = 0; i < rar.affixCount && i < shuffled.length; i++) {
+    const affixKey = shuffled[i];
+    if (!mainAffix) mainAffix = affixKey;
+
+    let value = 0;
+    if (affixKey === 'damage') value = Math.round((2 + ilvl * 1.1) * rar.mult);
+    else if (affixKey === 'spellPower') value = Math.round((4 + ilvl * 2.2) * rar.mult);
+    else if (affixKey === 'armor') value = Math.round((2 + ilvl * 0.9) * rar.mult);
+    else if (affixKey === 'maxHp') value = Math.round((10 + ilvl * 4) * rar.mult);
+    else if (affixKey === 'speed') value = Math.round((0.3 + ilvl * 0.08) * 10) / 10;
+    else if (affixKey === 'critChance') value = Math.min(25, Math.round((3 + ilvl * 0.8) * rar.mult));
+    else if (affixKey === 'critDamage') value = Math.round((12 + ilvl * 3) * rar.mult);
+    else if (affixKey === 'hpRegen') value = Math.round((0.3 + ilvl * 0.1) * 10) / 10;
+    else if (affixKey === 'lifesteal') value = Math.min(10, Math.round((1.5 + ilvl * 0.3) * 10) / 10);
+    else if (affixKey === 'cooldownReduction') value = Math.min(20, Math.round((2 + ilvl * 0.6) * rar.mult));
+    else if (affixKey === 'luck') value = Math.round((4 + ilvl * 1.2) * rar.mult);
+
+    stats[affixKey] = (stats[affixKey] || 0) + value;
+  }
+
+  let finalName = baseName;
+  if (rarity === 'legendary') {
+    finalName += ' ' + LEGENDARY_TITLES[Math.floor(Math.random() * LEGENDARY_TITLES.length)];
+  } else if (mainAffix && DND_AFFIX_SUFFIXES[mainAffix]) {
+    finalName += ' ' + DND_AFFIX_SUFFIXES[mainAffix];
+  }
+
+  const icons: Record<ItemSlot, string> = {
+    weapon: classId === 'wizard' ? '🪄' : (classId === 'rogue' ? '🗡️' : (classId === 'cleric' ? '🔨' : '⚔️')),
+    armor: classId === 'wizard' ? '🥋' : '🛡️',
+    helm: classId === 'wizard' ? '👑' : '🪖',
+    ring: '💍',
+    relic: '📜'
+  };
+
+  const goldValue = Math.round((12 + ilvl * 8) * rar.mult);
+
+  return {
+    id: nextItemId++,
+    name: finalName,
+    slot,
+    rarity,
+    ilvl,
+    stats,
+    icon: icons[slot],
+    goldValue,
+    isNew: true
+  };
+}
+
+export function rollRandomRarity(actNumber: number, luckBonus = 0): ItemRarity {
+  const roll = Math.random() * 100 - luckBonus;
+  if (roll < 1.5 + actNumber * 1.2) return 'legendary';
+  if (roll < 8 + actNumber * 3) return 'epic';
+  if (roll < 25 + actNumber * 4) return 'rare';
+  if (roll < 60) return 'uncommon';
+  return 'common';
+}
