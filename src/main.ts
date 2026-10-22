@@ -138,6 +138,15 @@ if (btnMap) {
   });
 }
 
+const btnCodex = document.getElementById('btn-open-codex');
+if (btnCodex) {
+  btnCodex.addEventListener('click', () => {
+    if (gameState.state === 'play') {
+      modals.showCodex(false);
+    }
+  });
+}
+
 const minimapCanvas = document.getElementById('minimap-canvas');
 if (minimapCanvas) {
   minimapCanvas.addEventListener('click', () => {
@@ -176,6 +185,15 @@ function gameLoop(now: number): void {
   const dt = Math.min(0.033, (now - lastTime) / 1000);
   lastTime = now;
 
+  // Hit-stop impact freeze on heavy impacts
+  if (combat.hitStopTimer > 0) {
+    combat.hitStopTimer -= dt;
+    particles.update(dt * 0.2, window.innerWidth, window.innerHeight);
+    renderer.render(gameState.scene, camera);
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
   // Global pause toggle check
   if (input.isPauseRequested) {
     input.isPauseRequested = false;
@@ -211,6 +229,10 @@ function gameLoop(now: number): void {
     if (input.isMapRequested) {
       input.isMapRequested = false;
       gameState.openFastTravelMap();
+    }
+    if (input.isCodexRequested) {
+      input.isCodexRequested = false;
+      modals.showCodex(false);
     }
 
     // Move player

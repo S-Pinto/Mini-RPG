@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { CharacterStats, ClassId, Item, SubclassConfig, FeatUpgrade, SkillAugment } from '../types/game.ts';
+import type { CharacterStats, ClassId, Item, SubclassConfig, FeatUpgrade, SkillAugment, DarkPact } from '../types/game.ts';
 import { CLASSES_DATA } from '../types/classesData.ts';
 import { buildPlayerModel, type HumanoidRig, type AttackAnimationType } from '../graphics/proceduralModels.ts';
 import { dungeon, type DungeonRoom } from '../world/dungeonGenerator.ts';
@@ -23,6 +23,7 @@ export class Player {
   public pendingLevelUps = 0;
   public feats: FeatUpgrade[] = [];
   public skillAugments: SkillAugment[] = [];
+  public activePacts: DarkPact[] = [];
   public skillCharges: Record<string, number> = {};
   public activeOrbs: { angle: number; radius: number; timer: number; color: number; damage: number }[] = [];
   public bonusShield = 0;

@@ -156,10 +156,19 @@ export class DungeonGenerator {
       shrineRoom.cleared = true;
     }
 
+    // 6. Dark Pact room (Altare dei Dannati)
+    if (available.length > 0) {
+      const pactRoom = available.shift()!;
+      pactRoom.type = 'pact';
+      pactRoom.cleared = true;
+    }
+
     // Build tile layouts and props with complex shapes for every room
+    let cagePlaced = false;
     for (const r of rooms) {
       this.buildComplexRoomTiles(r);
-      this.populateProps(r);
+      this.populateProps(r, !cagePlaced && r.type === 'normal');
+      if (r.type === 'normal' && !cagePlaced) cagePlaced = true;
     }
 
     return rooms;
@@ -342,7 +351,7 @@ export class DungeonGenerator {
     return { x: WORLD_W / 2, y: WORLD_H / 2 };
   }
 
-  private populateProps(r: DungeonRoom): void {
+  private populateProps(r: DungeonRoom, withCage = false): void {
     let propSeq = 0;
 
     if (r.type === 'start') {
@@ -409,6 +418,21 @@ export class DungeonGenerator {
           hp: 10
         });
       }
+    } else if (r.type === 'pact') {
+      // Altare dei Dannati (Dark Pact Altar)
+      const spot = this.findFreeSpot(r, 0, 0, 0);
+      r.props.push({
+        id: ++propSeq,
+        x: spot.x,
+        y: spot.y,
+        type: 'pact_altar',
+        hp: 9999,
+        opened: false
+      });
+      for (let i = 0; i < 3; i++) {
+        const s = this.findFreeSpot(r, spot.x, spot.y, 2.0);
+        r.props.push({ id: ++propSeq, x: s.x, y: s.y, type: 'pot', hp: 10 });
+      }
     } else if (r.type === 'shrine') {
       const spot = this.findFreeSpot(r, 0, 0, 0);
       r.props.push({
@@ -420,7 +444,6 @@ export class DungeonGenerator {
         shrineUsed: false,
         shrineType: 'radiance'
       });
-      // Shrine offerings: altar table & ritual urns
       const s1 = this.findFreeSpot(r, spot.x, spot.y, 2.0);
       r.props.push({
         id: ++propSeq,
@@ -440,8 +463,7 @@ export class DungeonGenerator {
         });
       }
     } else if (r.type === 'normal') {
-      // Mini-dungeon chambers populated with tables, chairs, barrels, pots, and crates!
-      // 1. Dining / Meeting set (table + 2 chairs)
+      // 1. Dining set (table + 2 chairs)
       const tSpot = this.findFreeSpot(r, 0, 0, 0);
       r.props.push({
         id: ++propSeq,
@@ -465,9 +487,54 @@ export class DungeonGenerator {
         hp: 8
       });
 
-      // 2. Clutter in other sub-rooms: crates, barrels, pots
+      // 2. Traps and Hazards: Explosive barrel, Toxic barrel, Spike trap
+      const expSpot = this.findFreeSpot(r, tSpot.x, tSpot.y, 3.0);
+      r.props.push({
+        id: ++propSeq,
+        x: expSpot.x,
+        y: expSpot.y,
+        type: 'explosive_barrel',
+        hp: 1
+      });
+
+      if (Math.random() < 0.65) {
+        const toxSpot = this.findFreeSpot(r, expSpot.x, expSpot.y, 3.0);
+        r.props.push({
+          id: ++propSeq,
+          x: toxSpot.x,
+          y: toxSpot.y,
+          type: 'toxic_barrel',
+          hp: 1
+        });
+      }
+
+      const spikeSpot = this.findFreeSpot(r, tSpot.x, tSpot.y, 2.5);
+      r.props.push({
+        id: ++propSeq,
+        x: spikeSpot.x,
+        y: spikeSpot.y,
+        type: 'spike_trap',
+        hp: 9999,
+        trapTimer: Math.random() * 2.5,
+        trapActive: false
+      });
+
+      // 3. Captive Ally Cage (guaranteed once per floor)
+      if (withCage) {
+        const cageSpot = this.findFreeSpot(r, tSpot.x, tSpot.y, 3.5);
+        r.props.push({
+          id: ++propSeq,
+          x: cageSpot.x,
+          y: cageSpot.y,
+          type: 'cage',
+          hp: 20,
+          cageFreed: false
+        });
+      }
+
+      // 4. Clutter in other sub-rooms: crates, barrels, pots
       const clutterTypes: ('barrel' | 'pot' | 'crate')[] = ['barrel', 'pot', 'crate'];
-      const extraProps = 4 + Math.floor(Math.random() * 4);
+      const extraProps = 3 + Math.floor(Math.random() * 3);
       for (let i = 0; i < extraProps; i++) {
         const spot = this.findFreeSpot(r, tSpot.x, tSpot.y, 2.0);
         r.props.push({

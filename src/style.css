@@ -3005,3 +3005,712 @@ html, body {
     max-height: 220px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* 8. ANCESTRAL SANCTUM (Meta-Progression Upgrades Modal)         */
+/* ═══════════════════════════════════════════════════════════════ */
+.sanctum-modal-content {
+  background: radial-gradient(circle at 50% 10%, rgba(30, 16, 50, 0.98) 0%, rgba(12, 8, 22, 0.99) 100%);
+  border: 2px solid #ffd700;
+  border-radius: 20px;
+  padding: 26px;
+  width: 95%;
+  max-width: 980px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.95), 0 0 40px rgba(168, 85, 247, 0.25);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.sanctum-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1.5px solid rgba(255, 215, 0, 0.25);
+  padding-bottom: 14px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sanctum-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sanctum-crest {
+  font-size: 38px;
+  filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
+}
+
+.sanctum-title {
+  font-family: var(--font-dnd);
+  font-size: 20px;
+  color: #ffd700;
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+
+.sanctum-subtitle {
+  font-size: 12px;
+  color: #c4b5fd;
+  margin: 3px 0 0 0;
+}
+
+.sanctum-essence-badge {
+  background: linear-gradient(135deg, rgba(88, 28, 135, 0.6) 0%, rgba(46, 16, 101, 0.8) 100%);
+  border: 1.5px solid #c084fc;
+  border-radius: 12px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 0 16px rgba(192, 132, 252, 0.35);
+}
+
+.essence-sparkle {
+  font-size: 20px;
+}
+
+.essence-label {
+  font-size: 12px;
+  color: #e9d5ff;
+  font-weight: 600;
+}
+
+.essence-value {
+  font-family: var(--font-dnd);
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 0 8px #c084fc;
+}
+
+.sanctum-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.sanctum-card {
+  background: rgba(24, 16, 38, 0.85);
+  border: 1.5px solid rgba(168, 85, 247, 0.3);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.22s ease;
+}
+
+.sanctum-card:hover {
+  border-color: #ffd700;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6), 0 0 16px rgba(255, 215, 0, 0.2);
+}
+
+.sanctum-card.sanctum-max {
+  border-color: #f59e0b;
+  background: linear-gradient(160deg, rgba(38, 24, 12, 0.9) 0%, rgba(20, 14, 28, 0.9) 100%);
+}
+
+.sanctum-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sanctum-card-icon {
+  font-size: 28px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sanctum-card-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.sanctum-card-name {
+  font-family: var(--font-dnd);
+  font-size: 14px;
+  color: #fff;
+  margin: 0;
+}
+
+.sanctum-card-rank {
+  font-size: 11px;
+  color: #ffd700;
+  font-weight: 700;
+}
+
+.sanctum-card-desc {
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.sanctum-card-stat {
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: #a7f3d0;
+}
+
+.sanctum-card-stat .next-stat {
+  color: #fde047;
+}
+
+.sanctum-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sanctum-cost-label {
+  font-size: 12px;
+  color: #e2e8f0;
+}
+
+.btn-sanctum-buy {
+  font-family: var(--font-dnd);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-sanctum-buy.active {
+  background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%);
+  border: 1px solid #c084fc;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
+}
+
+.btn-sanctum-buy.active:hover {
+  background: linear-gradient(135deg, #c084fc 0%, #9333ea 100%);
+  transform: translateY(-1px);
+}
+
+.btn-sanctum-buy.disabled {
+  background: rgba(50, 40, 65, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.sanctum-stats-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1.5px solid rgba(255, 215, 0, 0.2);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sanctum-run-stats {
+  font-size: 12px;
+  color: #c4b5fd;
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* 9. DARK PACTS (Patti con l'Ombra Modal)                        */
+/* ═══════════════════════════════════════════════════════════════ */
+.pacts-modal-content {
+  background: radial-gradient(circle at 50% 15%, rgba(45, 10, 30, 0.98) 0%, rgba(15, 5, 20, 0.99) 100%);
+  border: 2px solid #e11d48;
+  border-radius: 20px;
+  padding: 26px;
+  width: 95%;
+  max-width: 920px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.95), 0 0 50px rgba(225, 29, 72, 0.35);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.pacts-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1.5px solid rgba(225, 29, 72, 0.3);
+  padding-bottom: 14px;
+}
+
+.pacts-crest {
+  font-size: 40px;
+  filter: drop-shadow(0 0 12px rgba(225, 29, 72, 0.7));
+}
+
+.pacts-title {
+  font-family: var(--font-dnd);
+  font-size: 22px;
+  color: #fb7185;
+  margin: 0;
+  letter-spacing: 1px;
+}
+
+.pacts-subtitle {
+  font-size: 13px;
+  color: #fda4af;
+  max-width: 650px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.pacts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.pact-card {
+  position: relative;
+  background: rgba(25, 10, 22, 0.85);
+  border: 1.5px solid rgba(225, 29, 72, 0.4);
+  border-radius: 16px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+  transition: all 0.25s ease;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+}
+
+.pact-card:hover {
+  border-color: #f43f5e;
+  transform: translateY(-4px);
+  box-shadow: 0 14px 35px rgba(0,0,0,0.8), 0 0 25px rgba(244, 63, 94, 0.4);
+}
+
+.pact-icon-wrap {
+  font-size: 38px;
+  filter: drop-shadow(0 0 8px rgba(244, 63, 94, 0.6));
+}
+
+.pact-name {
+  font-family: var(--font-dnd);
+  font-size: 16px;
+  color: #fff;
+  margin: 0;
+}
+
+.pact-flavor {
+  font-size: 11px;
+  color: #cbd5e1;
+  font-style: italic;
+  margin: 0;
+}
+
+.pact-effect-box {
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+}
+
+.pact-effect-box.boon {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+
+.pact-effect-box.boon .pact-effect-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #34d399;
+}
+
+.pact-effect-box.boon .pact-effect-text {
+  font-size: 12px;
+  color: #a7f3d0;
+  font-weight: 600;
+}
+
+.pact-effect-box.curse {
+  background: rgba(225, 29, 72, 0.14);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+}
+
+.pact-effect-box.curse .pact-effect-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #f43f5e;
+}
+
+.pact-effect-box.curse .pact-effect-text {
+  font-size: 12px;
+  color: #fecdd3;
+  font-weight: 600;
+}
+
+.btn-seal-pact {
+  margin-top: auto;
+  background: linear-gradient(135deg, #be123c 0%, #881337 100%);
+  border: 1.5px solid #fb7185;
+  color: #fff;
+  font-family: var(--font-dnd);
+  font-weight: 800;
+  font-size: 13px;
+  padding: 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 14px rgba(225, 29, 72, 0.4);
+}
+
+.btn-seal-pact:hover {
+  background: linear-gradient(135deg, #e11d48 0%, #9f1239 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(225, 29, 72, 0.7);
+}
+
+.pacts-footer-actions {
+  display: flex;
+  justify-content: center;
+  padding-top: 10px;
+  border-top: 1px solid rgba(225, 29, 72, 0.2);
+}
+
+.btn-reject-pact {
+  background: rgba(30, 20, 35, 0.8);
+  border: 1px solid #64748b;
+  color: #cbd5e1;
+  font-family: var(--font-dnd);
+  font-size: 13px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-reject-pact:hover {
+  background: rgba(71, 85, 105, 0.4);
+  color: #fff;
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* 10. BESTIARY & WEAPONS CODEX MODAL                            */
+/* ═══════════════════════════════════════════════════════════════ */
+.codex-modal-content {
+  background: radial-gradient(circle at 50% 10%, rgba(24, 20, 38, 0.98) 0%, rgba(10, 8, 16, 0.99) 100%);
+  border: 2px solid #ffd700;
+  border-radius: 20px;
+  padding: 24px;
+  width: 95%;
+  max-width: 1020px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.95), 0 0 40px rgba(255, 215, 0, 0.2);
+  max-height: 90vh;
+}
+
+.codex-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1.5px solid rgba(255, 215, 0, 0.25);
+  padding-bottom: 12px;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.codex-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.codex-crest {
+  font-size: 34px;
+}
+
+.codex-title {
+  font-family: var(--font-dnd);
+  font-size: 19px;
+  color: #ffd700;
+  margin: 0;
+}
+
+.codex-subtitle {
+  font-size: 12px;
+  color: #c4b5fd;
+  margin: 2px 0 0 0;
+}
+
+.codex-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-codex-tab {
+  background: rgba(36, 26, 56, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  font-family: var(--font-dnd);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-codex-tab.active {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  border-color: #ffd700;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.4);
+}
+
+.codex-body {
+  overflow-y: auto;
+  max-height: 65vh;
+  padding-right: 6px;
+}
+
+.codex-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 14px;
+}
+
+.bestiary-card {
+  background: rgba(22, 16, 32, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.bestiary-card:hover {
+  border-color: #ffd700;
+  transform: translateY(-2px);
+}
+
+.bestiary-card.bestiary-boss {
+  border-color: #ef4444;
+  background: linear-gradient(160deg, rgba(45, 12, 18, 0.9) 0%, rgba(20, 10, 24, 0.9) 100%);
+}
+
+.bestiary-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bestiary-avatar {
+  font-size: 32px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.bestiary-name {
+  font-family: var(--font-dnd);
+  font-size: 14px;
+  color: #fff;
+  margin: 0;
+}
+
+.bestiary-badges {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.badge-role {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.badge-role.role-boss {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.badge-role.role-elite {
+  background: rgba(245, 158, 11, 0.3);
+  color: #fde68a;
+}
+
+.badge-zone {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.bestiary-stats-row {
+  display: flex;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.bestiary-weakness {
+  font-size: 11px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.weak-lbl {
+  color: #fde047;
+  font-weight: 700;
+}
+
+.weak-val {
+  color: #86efac;
+}
+
+.bestiary-attacks-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.attacks-lbl {
+  font-size: 10px;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.attacks-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.attack-tag {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 2px 6px;
+  color: #e2e8f0;
+}
+
+.bestiary-lore {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+  margin: 0;
+  line-height: 1.35;
+}
+
+/* Weapons Compendium Cards */
+.weapon-codex-card {
+  background: rgba(22, 16, 32, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.weapon-codex-card:hover {
+  border-color: #ffd700;
+  transform: translateY(-2px);
+}
+
+.weapon-codex-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.weapon-codex-icon {
+  font-size: 28px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.weapon-codex-name {
+  font-family: var(--font-dnd);
+  font-size: 14px;
+  color: #ffd700;
+  margin: 0;
+}
+
+.weapon-codex-class {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.weapon-codex-pattern {
+  font-size: 11px;
+  color: #e2e8f0;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.weapon-codex-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #a7f3d0;
+}
+
+.weapon-codex-perk {
+  font-size: 11px;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.perk-label {
+  font-weight: 700;
+  color: #ffd700;
+}
+
+.perk-desc {
+  color: #fef08a;
+}
+
+.weapon-codex-lore {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
+  margin: 0;
+}
+

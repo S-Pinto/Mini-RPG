@@ -6,7 +6,7 @@ import { Player } from '../entities/player.ts';
 import { Enemy } from '../entities/enemy.ts';
 import { dungeon, type DungeonRoom, WORLD_W, WORLD_H, DOOR_CX, DOOR_CY, TILE_SIZE } from '../world/dungeonGenerator.ts';
 import { ZONES, ZONE_ORDER } from '../world/zones.ts';
-import type { ClassId, FeatUpgrade, Item, ZoneConfig } from '../types/game.ts';
+import type { ClassId, EliteAffix, FeatUpgrade, Item, ZoneConfig } from '../types/game.ts';
 import { generateItem, rollRandomRarity, RARITIES } from '../items/itemDatabase.ts';
 import { particles } from '../graphics/particles.ts';
 import { sound } from '../audio/soundEngine.ts';
@@ -14,6 +14,8 @@ import { combat } from '../combat/combatSystem.ts';
 import { telegraphs } from '../combat/telegraphs.ts';
 import { modals } from '../ui/modals.ts';
 import { GEO, getLambert, getBasic, buildGrandPortalModel } from '../graphics/proceduralModels.ts';
+import { Ally } from '../entities/ally.ts';
+import { metaProgression } from './metaProgression.ts';
 
 export interface GroundLoot {
   mesh: THREE.Group;
@@ -65,6 +67,7 @@ export class GameState {
   public currentZoneIndex = 0;
   public currentZone: ZoneConfig;
   public player: Player;
+  public allies: Ally[] = [];
   public rooms: DungeonRoom[] = [];
   public currentRoom: DungeonRoom | null = null;
   public enemies: Enemy[] = [];
@@ -103,6 +106,7 @@ export class GameState {
 
     // Create player with matching subclass weapon
     this.dynamicGroup.clear();
+    this.allies = [];
     this.player = new Player(classId, subclassIndex);
     const starterWeapon = generateItem('weapon', 1, 'common', classId);
     starterWeapon.name = this.player.subclass.weaponName;
@@ -117,6 +121,9 @@ export class GameState {
     else if (this.player.subclass.weaponStyle === 'mace_shield') starterWeapon.modelType = 'mace';
     else starterWeapon.modelType = 'sword';
     this.player.equip.weapon = starterWeapon;
+
+    // Apply Meta-Progression Sanctum Upgrades
+    metaProgression.applyToPlayer(this.player);
 
     this.player.recalculateStats();
     this.player.hp = this.player.maxHp;
@@ -161,6 +168,14 @@ export class GameState {
 
     // Re-add player to dynamic group
     this.dynamicGroup.add(this.player.mesh);
+
+    // Re-add and reposition living allies
+    for (const ally of this.allies) {
+      ally.x = this.player.x + (Math.random() - 0.5) * 2;
+      ally.y = this.player.y + (Math.random() - 0.5) * 2;
+      ally.mesh.position.set(ally.x, 0, ally.y);
+      this.dynamicGroup.add(ally.mesh);
+    }
 
     // Spawn enemies if room was never spawned
     if (!r.cleared && !r.spawned) {
@@ -207,11 +222,11 @@ export class GameState {
   }
 
   private spawnRoomEnemies(r: DungeonRoom): void {
-    // Tougher enemies that scale more aggressively per act (+70% stats per act)
-    const actMult = 1.0 + (this.currentZone.actNumber - 1) * 0.70;
+    // Tougher enemies that scale more aggressively per act (+85% stats per act)
+    const actMult = 1.0 + (this.currentZone.actNumber - 1) * 0.85;
 
     if (r.type === 'boss') {
-      const boss = new Enemy(this.currentZone.bossType, WORLD_W / 2, WORLD_H * 0.35, actMult * 1.45);
+      const boss = new Enemy(this.currentZone.bossType, WORLD_W / 2, WORLD_H * 0.35, actMult * 1.5);
       this.enemies.push(boss);
       this.dynamicGroup.add(boss.mesh);
       sound.dragonRoar();
@@ -219,18 +234,32 @@ export class GameState {
     }
 
     if (r.type === 'normal') {
-      // More enemies per room (4 to 9 enemies)
-      const enemyCount = 4 + Math.floor(Math.random() * 3) + this.currentZone.actNumber * 2;
+      // More enemies per room (5 to 11 enemies based on act)
+      const enemyCount = 5 + Math.floor(Math.random() * 3) + this.currentZone.actNumber * 2;
+      const affixes: EliteAffix[] = ['vampiric', 'swift', 'toxic_aura', 'shielded'];
+
       for (let i = 0; i < enemyCount; i++) {
         const pool = this.currentZone.enemyPool;
         const eType = pool[Math.floor(Math.random() * pool.length)];
 
         // Guaranteed free spot inside complex room shape
         const spot = dungeon.findFreeSpot(r, this.player.x, this.player.y, 6.0);
-        const isElite = Math.random() < (0.15 + this.currentZone.actNumber * 0.08);
-        const enemy = new Enemy(eType, spot.x, spot.y, actMult * (isElite ? 1.35 : 1.0));
+        const isElite = Math.random() < (0.22 + this.currentZone.actNumber * 0.08);
+        const affix = isElite ? affixes[Math.floor(Math.random() * affixes.length)] : undefined;
+        const enemy = new Enemy(eType, spot.x, spot.y, actMult * (isElite ? 1.4 : 1.0), affix);
         this.enemies.push(enemy);
         this.dynamicGroup.add(enemy.mesh);
+
+        // Display Elite floating badge
+        if (isElite && affix) {
+          const affixLabels: Record<EliteAffix, string> = {
+            vampiric: '🩸 VAMPIRICO',
+            swift: '⚡ RAPIDO',
+            toxic_aura: '☣️ TOSSICO',
+            shielded: '🛡️ CORAZZATO'
+          };
+          particles.spawnFloatingText(spot.x, 2.2, spot.y, `ÉLITE ${affixLabels[affix]}`, '#f59e0b', true);
+        }
       }
     }
   }
@@ -242,6 +271,7 @@ export class GameState {
     if (this.player.hp <= 0) {
       this.state = 'over';
       sound.playerHurt();
+      metaProgression.recordRun(false);
       modals.recordRunScore({
         name: 'Campione dei Renegades',
         className: this.player.classId.toUpperCase(),
@@ -261,11 +291,67 @@ export class GameState {
       return;
     }
 
+    // Update Living Companions / Allies
+    for (let i = this.allies.length - 1; i >= 0; i--) {
+      const a = this.allies[i];
+      a.update(dt, this.player, this.enemies, this.currentRoom);
+      if (a.isDead) {
+        this.dynamicGroup.remove(a.mesh);
+        this.allies.splice(i, 1);
+      }
+    }
+
+    // Update Floor Hazards (Spike Traps)
+    const nowSec = performance.now() * 0.001;
+    for (const pr of this.currentRoom.props) {
+      if (pr.type === 'spike_trap') {
+        const cycle = (nowSec + pr.id * 0.7) % 2.4;
+        const isActive = cycle > 1.2;
+        if (isActive) {
+          // Trap damages player
+          if (Math.hypot(this.player.x - pr.x, this.player.y - pr.y) < 1.1) {
+            const dmg = this.player.takeDamage(12);
+            if (dmg > 0) {
+              sound.playerHurt();
+              particles.spawnBurst(this.player.x, 0.4, this.player.y, 8, 0x991b1b, 4);
+              particles.spawnFloatingText(this.player.x, 2.2, this.player.y, `-${dmg} PUNTE ACCIAIO!`, '#dc2626', true);
+            }
+          }
+          // Trap damages enemies
+          for (const e of this.enemies) {
+            if (e.isDead) continue;
+            if (Math.hypot(e.x - pr.x, e.y - pr.y) < e.stats.radius + 0.6) {
+              e.takeDamage(24, e.x - pr.x, e.y - pr.y, 4);
+              particles.spawnBurst(e.x, 0.4, e.y, 8, 0x991b1b, 4);
+              particles.spawnFloatingText(e.x, 1.8, e.y, '24 TRAPPOLA', '#ef4444');
+            }
+          }
+        }
+      }
+    }
+
     // Update Enemies
     for (const e of this.enemies) {
-      e.update(dt, this.player.x, this.player.y, this.currentRoom, (enemy, tx, ty) => {
-        combat.handleEnemyAttack(enemy, tx, ty, this.player);
-      });
+      e.update(
+        dt,
+        this.player.x,
+        this.player.y,
+        this.currentRoom,
+        (enemy, tx, ty) => {
+          combat.handleEnemyAttack(enemy, tx, ty, this.player);
+        },
+        (enemy) => {
+          // Toxic Aura pulse damage on player
+          const dist = Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y);
+          if (dist <= 2.8) {
+            const dmg = this.player.takeDamage(7);
+            if (dmg > 0) {
+              sound.playerHurt();
+              particles.spawnFloatingText(this.player.x, 2.2, this.player.y, `-${dmg} ☣️ NUBE TOSSICA!`, '#22c55e', true);
+            }
+          }
+        }
+      );
     }
 
     // Check Enemy Deaths & Loot Drops
@@ -275,14 +361,22 @@ export class GameState {
         sound.killEnemy();
         particles.spawnBurst(e.x, 1.2, e.y, 20, e.stats.color, 6);
 
+        // Astral Essence Drop & Kill Tracking
+        const essenceDrop = e.stats.isBoss ? 25 : (Math.random() < 0.45 ? 1 + Math.floor(Math.random() * 2) : 0);
+        if (essenceDrop > 0) {
+          metaProgression.addEssence(essenceDrop);
+          particles.spawnFloatingText(e.x, 2.7, e.y, `+${essenceDrop} ✨ Essenza`, '#c084fc', true);
+        }
+        metaProgression.recordKill();
+
         // 1. Guaranteed EXP Crystal Drop
         this.spawnGroundLoot('exp', e.x, e.y, e.stats.xpReward);
 
         // 2. Gold Coins Drop
         this.spawnGroundLoot('coin', e.x + 0.4, e.y + 0.3, 1 + Math.floor(Math.random() * 3));
 
-        // 3. Healing Potion Drop (higher chance when player wounded)
-        const potionChance = this.player.hp < this.player.maxHp * 0.5 ? 0.6 : 0.3;
+        // 3. Healing Potion Drop (balanced from 60%/30% to 22%/10% so HP management is strategic)
+        const potionChance = this.player.hp < this.player.maxHp * 0.35 ? 0.22 : 0.10;
         if (Math.random() < potionChance) {
           this.spawnGroundLoot('heart', e.x - 0.4, e.y - 0.3);
         }
@@ -643,6 +737,30 @@ export class GameState {
             particles.spawnFloatingText(this.player.x, 2.5, this.player.y, `MUTAZIONE CONSACRATA: ${aug.name}!`, '#f43f5e', true);
           });
         }
+      } else if (p.type === 'cage') {
+        if (dist < 2.2 && !p.opened) {
+          p.opened = true;
+          p.hp = 0;
+          if (p.mesh) p.mesh.visible = false;
+          sound.breakProp();
+          sound.levelUp();
+          particles.spawnShockwave(p.x, p.y, 4.0, 0x10b981);
+          particles.spawnBurst(p.x, 1.0, p.y, 35, 0x059669, 7);
+          const allyType = Math.random() < 0.5 ? 'archer_lyanna' : 'cleric_elidor';
+          const companion = new Ally(allyType, p.x, p.y);
+          this.allies.push(companion);
+          this.dynamicGroup.add(companion.mesh);
+          particles.spawnFloatingText(p.x, 2.6, p.y, `COMPAGNO LIBERATO: ${companion.name}!`, '#34d399', true);
+        }
+      } else if (p.type === 'pact_altar') {
+        if (dist < 2.4 && !p.opened) {
+          p.opened = true;
+          sound.dragonRoar();
+          particles.spawnShockwave(p.x, p.y, 4.5, 0x9333ea);
+          modals.showDarkPacts(this.player, (pact) => {
+            particles.spawnFloatingText(this.player.x, 2.8, this.player.y, `PATTO SIGILLATO: ${pact.name}!`, '#c084fc', true);
+          });
+        }
       } else if (dist < 1.8) {
         if (p.type === 'chest' && !p.opened) {
           p.opened = true;
@@ -672,6 +790,7 @@ export class GameState {
     if (isFinalZone) {
       this.state = 'victory';
       sound.levelUp();
+      metaProgression.recordRun(true);
       modals.recordRunScore({
         name: 'Salvatore di Okkarn',
         className: this.player.classId.toUpperCase(),

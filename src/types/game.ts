@@ -127,6 +127,8 @@ export type EnemyType =
   // Vazark Caverns
   | 'kobold_spearman' | 'kobold_bomber' | 'dragon_shaman' | 'boss_dragon_vermithrax';
 
+export type EliteAffix = 'vampiric' | 'swift' | 'toxic_aura' | 'shielded';
+
 export interface EnemyStats {
   name: string;
   hp: number;
@@ -137,6 +139,7 @@ export interface EnemyStats {
   xpReward: number;
   isBoss?: boolean;
   isElite?: boolean;
+  affix?: EliteAffix;
   color: number;
   attackRange: number;
   attackCooldown: number;
@@ -182,7 +185,7 @@ export interface FeatUpgrade {
   specialFlag?: string;
 }
 
-export type RoomType = 'start' | 'normal' | 'treasure' | 'shrine' | 'boss' | 'checkpoint' | 'shop';
+export type RoomType = 'start' | 'normal' | 'treasure' | 'shrine' | 'boss' | 'checkpoint' | 'shop' | 'pact';
 
 export type SkillAugmentEffect = 
   | 'orbit' 
@@ -214,11 +217,15 @@ export interface DestructibleProp {
   id: number;
   x: number;
   y: number;
-  type: 'barrel' | 'pot' | 'chest' | 'shrine' | 'table' | 'chair' | 'crate' | 'teleport_pad' | 'shop_counter' | 'skill_crucible';
+  type: 'barrel' | 'pot' | 'chest' | 'shrine' | 'table' | 'chair' | 'crate' | 'teleport_pad' | 'shop_counter' | 'skill_crucible' | 'explosive_barrel' | 'toxic_barrel' | 'spike_trap' | 'cage' | 'pact_altar';
   hp: number;
+  mesh?: any;
   opened?: boolean;
   shrineUsed?: boolean;
   shrineType?: 'blood' | 'radiance' | 'fortune';
+  trapTimer?: number;
+  trapActive?: boolean;
+  cageFreed?: boolean;
 }
 
 export interface GroundTelegraph {
@@ -233,5 +240,62 @@ export interface GroundTelegraph {
   timeElapsed: number;
   color: number;
   onExecute: () => void;
+}
+
+// --- Status Effects ---
+export type StatusEffectType = 'burn' | 'freeze' | 'shock' | 'poison';
+
+export interface StatusEffect {
+  type: StatusEffectType;
+  duration: number;
+  tickTimer?: number;
+  damagePerTick?: number;
+  slowFactor?: number;
+}
+
+// --- Meta Progression (Sanctum) ---
+export interface MetaUpgradeDef {
+  id: string;
+  name: string;
+  desc: string;
+  icon: string;
+  maxRank: number;
+  maxLevel?: number;
+  perLevelDesc?: (rank: number) => string;
+  costs: number[]; // cost in astral essence per rank
+}
+
+export interface MetaProgressionData {
+  astralEssence: number;
+  upgrades: Record<string, number>; // id -> current rank
+  totalRuns: number;
+  totalKills: number;
+  bossesDefeated: number;
+}
+
+// --- Dark Pacts (Risk/Reward) ---
+export interface DarkPact {
+  id: string;
+  name: string;
+  icon: string;
+  flavor?: string;
+  curseTitle: string;
+  curseDesc: string;
+  boonTitle: string;
+  boonDesc: string;
+}
+
+// --- Allies ---
+export type AllyType = 'archer_lyanna' | 'cleric_elidor';
+
+export interface AllyConfig {
+  type: AllyType;
+  name: string;
+  title: string;
+  icon: string;
+  color: number;
+  hp: number;
+  maxHp: number;
+  damage: number;
 }
 

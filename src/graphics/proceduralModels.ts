@@ -2,7 +2,7 @@
 // The Albedo Renegades: Shadow of Elanthria
 
 import * as THREE from 'three';
-import type { ClassId, EnemyType, Item, ItemSlot, WeaponStyle, WeaponModelType, HelmModelType, ArmorModelType } from '../types/game.ts';
+import type { ClassId, EnemyType, Item, ItemSlot, WeaponStyle, WeaponModelType, HelmModelType, ArmorModelType, AllyType, DestructibleProp } from '../types/game.ts';
 
 export const GEO = {
   box: new THREE.BoxGeometry(1, 1, 1),
@@ -2241,9 +2241,9 @@ export function buildEnemyModel(type: EnemyType): EnemyModelRig {
 }
 
 // -------------------------------------------------------------
-// Interactive Props: Chest, Barrel, Pot, Shrine
+// Interactive Props: Chest, Barrel, Pot, Shrine, Traps, Altar, Cage
 // -------------------------------------------------------------
-export function buildPropModel(type: 'chest' | 'barrel' | 'pot' | 'shrine' | 'table' | 'chair' | 'crate' | 'teleport_pad' | 'shop_counter' | 'skill_crucible'): { root: THREE.Group } {
+export function buildPropModel(type: DestructibleProp['type']): { root: THREE.Group } {
   const root = new THREE.Group();
   if (type === 'chest') {
     const base = new THREE.Mesh(GEO.box, getLambert(0x5a3a1c));
@@ -2427,6 +2427,95 @@ export function buildPropModel(type: 'chest' | 'barrel' | 'pot' | 'shrine' | 'ta
     lightPillar.position.set(0, 2.2, 0);
 
     root.add(dais, basin, flameOrb, lightPillar);
+  } else if (type === 'explosive_barrel') {
+    const barrel = new THREE.Mesh(GEO.cyl, getLambert(0xc91f37, 0x440a10));
+    barrel.scale.set(0.44, 0.8, 0.44);
+    barrel.position.set(0, 0.4, 0);
+
+    const band = new THREE.Mesh(GEO.cyl, getLambert(0xffd700, 0x443300));
+    band.scale.set(0.46, 0.16, 0.46);
+    band.position.set(0, 0.4, 0);
+
+    const fuse = new THREE.Mesh(GEO.cyl, getBasic(0xff5500, 0.9, true));
+    fuse.scale.set(0.04, 0.18, 0.04);
+    fuse.position.set(0, 0.88, 0);
+
+    const spark = new THREE.Mesh(GEO.sph, getBasic(0xffee33, 0.95, true));
+    spark.scale.setScalar(0.08);
+    spark.position.set(0, 0.98, 0);
+
+    root.add(barrel, band, fuse, spark);
+  } else if (type === 'toxic_barrel') {
+    const barrel = new THREE.Mesh(GEO.cyl, getLambert(0x1e3a1e, 0x0a1f0a));
+    barrel.scale.set(0.44, 0.8, 0.44);
+    barrel.position.set(0, 0.4, 0);
+
+    const slime = new THREE.Mesh(GEO.sph, getBasic(0x33ff55, 0.85, true));
+    slime.scale.set(0.45, 0.15, 0.45);
+    slime.position.set(0, 0.78, 0);
+
+    const oozeDrop = new THREE.Mesh(GEO.sph, getBasic(0x44ff66, 0.9, true));
+    oozeDrop.scale.set(0.08, 0.16, 0.08);
+    oozeDrop.position.set(0.4, 0.5, 0);
+
+    root.add(barrel, slime, oozeDrop);
+  } else if (type === 'spike_trap') {
+    const base = new THREE.Mesh(GEO.box, getLambert(0x2a2430));
+    base.scale.set(1.4, 0.08, 1.4);
+    base.position.set(0, 0.04, 0);
+
+    for (let x = -0.4; x <= 0.4; x += 0.4) {
+      for (let z = -0.4; z <= 0.4; z += 0.4) {
+        const spike = new THREE.Mesh(GEO.cone, getLambert(0xa6b0c0, 0x112233));
+        spike.scale.set(0.07, 0.55, 0.07);
+        spike.position.set(x, 0.32, z);
+        base.add(spike);
+      }
+    }
+    root.add(base);
+  } else if (type === 'cage') {
+    const floor = new THREE.Mesh(GEO.cyl, getLambert(0x1a1a24));
+    floor.scale.set(0.9, 0.1, 0.9);
+    floor.position.set(0, 0.05, 0);
+
+    const roof = new THREE.Mesh(GEO.cone, getLambert(0x262636));
+    roof.scale.set(0.95, 0.4, 0.95);
+    roof.position.set(0, 1.7, 0);
+
+    const barMat = getLambert(0x4a4a58);
+    for (let i = 0; i < 10; i++) {
+      const angle = (i * Math.PI * 2) / 10;
+      const bar = new THREE.Mesh(GEO.cyl, barMat);
+      bar.scale.set(0.03, 1.5, 0.03);
+      bar.position.set(Math.cos(angle) * 0.8, 0.85, Math.sin(angle) * 0.8);
+      root.add(bar);
+    }
+
+    const prisoner = new THREE.Mesh(GEO.cyl, getLambert(0x567d46));
+    prisoner.scale.set(0.24, 0.9, 0.24);
+    prisoner.position.set(0, 0.5, 0);
+
+    root.add(floor, roof, prisoner);
+  } else if (type === 'pact_altar') {
+    const dais = new THREE.Mesh(GEO.box, getLambert(0x140810, 0x220510));
+    dais.scale.set(1.4, 0.25, 1.4);
+    dais.position.set(0, 0.12, 0);
+
+    const pillar = new THREE.Mesh(GEO.box, getLambert(0x260d1b));
+    pillar.scale.set(0.85, 0.8, 0.85);
+    pillar.position.set(0, 0.6, 0);
+
+    const skull = new THREE.Mesh(GEO.sph, getBasic(0xff2244, 0.95, true));
+    skull.scale.set(0.25, 0.28, 0.25);
+    skull.position.set(0, 1.15, 0);
+
+    const darkPillar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.3, 0.3, 4.0, 16, 1, true),
+      getBasic(0x990022, 0.25, true)
+    );
+    darkPillar.position.set(0, 2.2, 0);
+
+    root.add(dais, pillar, skull, darkPillar);
   }
   return { root };
 }
@@ -2504,6 +2593,87 @@ export function buildGrandPortalModel(): { root: THREE.Group; update: (t: number
     dais.rotation.z = t * 0.8;
     const pulse = 1.0 + Math.sin(t * 3.5) * 0.08;
     vortexGroup.scale.set(pulse, pulse, 1);
+  };
+
+  return { root, update };
+}
+
+// -------------------------------------------------------------
+// Allied Companion NPC 3D Models (Lyanna & Elidor)
+// -------------------------------------------------------------
+export function buildAllyModel(type: AllyType): { root: THREE.Group; update: (t: number, isMoving: boolean) => void } {
+  const root = new THREE.Group();
+  createShadowBlob(root, 0.45);
+
+  const bodyGroup = new THREE.Group();
+  root.add(bodyGroup);
+
+  // Legs
+  const legMat = getLambert(0x2a1a38);
+  const legL = new THREE.Mesh(GEO.cyl, legMat);
+  legL.scale.set(0.08, 0.5, 0.08);
+  legL.position.set(-0.14, 0.25, 0);
+  const legR = legL.clone();
+  legR.position.x = 0.14;
+  bodyGroup.add(legL, legR);
+
+  // Torso
+  const isArcher = type === 'archer_lyanna';
+  const torsoColor = isArcher ? 0x244f32 : 0xede4d8;
+  const torso = new THREE.Mesh(GEO.cyl, getLambert(torsoColor));
+  torso.scale.set(0.24, 0.55, 0.18);
+  torso.position.set(0, 0.72, 0);
+  bodyGroup.add(torso);
+
+  // Cape
+  const capeColor = isArcher ? 0x1b3b25 : 0xa83232;
+  const cape = new THREE.Mesh(GEO.box, getLambert(capeColor));
+  cape.scale.set(0.38, 0.75, 0.04);
+  cape.position.set(0, 0.7, -0.12);
+  cape.rotation.x = 0.1;
+  bodyGroup.add(cape);
+
+  // Head & Hood/Hat
+  const head = new THREE.Mesh(GEO.sph, getLambert(0xf4d0b0));
+  head.scale.setScalar(0.18);
+  head.position.set(0, 1.15, 0);
+
+  const cowl = new THREE.Mesh(GEO.cone, getLambert(isArcher ? 0x1b3b25 : 0xd8c8b0));
+  cowl.scale.set(0.24, 0.35, 0.24);
+  cowl.position.set(0, 1.25, -0.02);
+  bodyGroup.add(head, cowl);
+
+  // Weapon in hand
+  const weaponGroup = new THREE.Group();
+  if (isArcher) {
+    const bow = new THREE.Mesh(GEO.torus, getLambert(0x8a5525));
+    bow.scale.set(0.3, 0.3, 0.03);
+    bow.position.set(0.28, 0.7, 0.1);
+    bow.rotation.y = Math.PI / 2;
+    weaponGroup.add(bow);
+  } else {
+    const staff = new THREE.Mesh(GEO.cyl, getLambert(0xffd700, 0x443300));
+    staff.scale.set(0.04, 1.2, 0.04);
+    staff.position.set(0.28, 0.7, 0.1);
+    const sunOrb = new THREE.Mesh(GEO.sph, getBasic(0xffea00, 0.95, true));
+    sunOrb.scale.setScalar(0.14);
+    sunOrb.position.set(0.28, 1.3, 0.1);
+    weaponGroup.add(staff, sunOrb);
+  }
+  bodyGroup.add(weaponGroup);
+
+  const update = (t: number, isMoving: boolean) => {
+    if (isMoving) {
+      legL.rotation.x = Math.sin(t * 8) * 0.45;
+      legR.rotation.x = -Math.sin(t * 8) * 0.45;
+      bodyGroup.position.y = Math.abs(Math.sin(t * 8)) * 0.05;
+      cape.rotation.x = 0.25 + Math.sin(t * 8) * 0.1;
+    } else {
+      legL.rotation.x = 0;
+      legR.rotation.x = 0;
+      bodyGroup.position.y = Math.sin(t * 2) * 0.02;
+      cape.rotation.x = 0.08;
+    }
   };
 
   return { root, update };

@@ -17,6 +17,7 @@ export class InputManager {
   public isPauseRequested = false;
   public isLevelUpRequested = false;
   public isMapRequested = false;
+  public isCodexRequested = false;
 
   private activeKeys = new Set<string>();
   private raycaster = new THREE.Raycaster();
@@ -51,6 +52,7 @@ export class InputManager {
       if (e.code === 'KeyP' || e.code === 'Escape') this.isPauseRequested = true;
       if (e.code === 'KeyL') this.isLevelUpRequested = true;
       if (e.code === 'KeyM') this.isMapRequested = true;
+      if (e.code === 'KeyB') this.isCodexRequested = true;
     });
 
     window.addEventListener('keyup', (e) => {

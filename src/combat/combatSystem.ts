@@ -9,6 +9,7 @@ import { telegraphs } from './telegraphs.ts';
 import type { Player } from '../entities/player.ts';
 import type { Enemy } from '../entities/enemy.ts';
 import { dungeon, type DungeonRoom } from '../world/dungeonGenerator.ts';
+import type { DestructibleProp } from '../types/game.ts';
 
 export interface Projectile {
   mesh: THREE.Mesh;
@@ -40,6 +41,69 @@ export class CombatSystem {
   public group = new THREE.Group();
   public projectiles: Projectile[] = [];
   public slashes: SlashEffect[] = [];
+  public hitStopTimer = 0;
+
+  public triggerPropDestruction(pr: DestructibleProp, player: Player, enemies: Enemy[]): void {
+    pr.hp = 0;
+    if (pr.mesh) pr.mesh.visible = false;
+
+    if (pr.type === 'explosive_barrel') {
+      sound.dragonRoar();
+      particles.spawnShockwave(pr.x, pr.y, 5.0, 0xff4400, 0.4);
+      particles.spawnBurst(pr.x, 1.0, pr.y, 45, 0xff5500, 10);
+      particles.spawnFloatingText(pr.x, 2.2, pr.y, '💥 DEFLAGRAZIONE!', '#ff4400', true);
+
+      // Damage enemies
+      for (const e of enemies) {
+        if (e.isDead) continue;
+        const d = Math.hypot(e.x - pr.x, e.y - pr.y);
+        if (d <= 4.5) {
+          e.takeDamage(65, e.x - pr.x, e.y - pr.y, 14);
+          e.applyStatusEffect('burn', 4.0, 8);
+          particles.spawnFloatingText(e.x, 2.0, e.y, '65 🔥 BRUCIATURA', '#ff6600', true);
+        }
+      }
+
+      // Damage player if in blast radius
+      const playerDist = Math.hypot(player.x - pr.x, player.y - pr.y);
+      if (playerDist <= 4.5) {
+        const dmg = player.takeDamage(25);
+        if (dmg > 0) {
+          sound.playerHurt();
+          particles.spawnFloatingText(player.x, 2.4, player.y, `-${dmg} ESPLOSIONE!`, '#ff2200', true);
+        }
+      }
+    } else if (pr.type === 'toxic_barrel') {
+      sound.heal();
+      particles.spawnShockwave(pr.x, pr.y, 4.2, 0x22c55e, 0.4);
+      particles.spawnBurst(pr.x, 1.0, pr.y, 35, 0x16a34a, 8);
+      particles.spawnFloatingText(pr.x, 2.2, pr.y, '☣️ NUBE TOSSICA!', '#22c55e', true);
+
+      for (const e of enemies) {
+        if (e.isDead) continue;
+        const d = Math.hypot(e.x - pr.x, e.y - pr.y);
+        if (d <= 4.0) {
+          e.takeDamage(25, e.x - pr.x, e.y - pr.y, 8);
+          e.applyStatusEffect('poison', 5.0, 6);
+          particles.spawnFloatingText(e.x, 2.0, e.y, '25 🧪 AVVELENATO', '#22c55e', true);
+        }
+      }
+
+      const playerDist = Math.hypot(player.x - pr.x, player.y - pr.y);
+      if (playerDist <= 4.0) {
+        const dmg = player.takeDamage(15);
+        if (dmg > 0) {
+          sound.playerHurt();
+          particles.spawnFloatingText(player.x, 2.4, player.y, `-${dmg} VELENO!`, '#22c55e', true);
+        }
+      }
+    } else {
+      sound.breakProp();
+      particles.spawnBurst(pr.x, 0.6, pr.y, 14, 0x8a5438, 4);
+      player.gold += Math.floor(1 + Math.random() * 4);
+      sound.coin();
+    }
+  }
 
   public spawnSlashEffect(
     x: number,
@@ -280,6 +344,10 @@ export class CombatSystem {
               particles.spawnBurst(e.x, 1.0, e.y, 8, isCrit ? 0xffd700 : 0xffffff, 5);
             }
 
+            if (isCrit || step === 2) {
+              this.hitStopTimer = 0.045;
+            }
+
             e.takeDamage(dmg, dx, dy, knockback);
             const label = step === 2 ? `${dmg} AFFONDO!` : (step === 1 ? `${dmg} TAGLIO!` : `${dmg}`);
             particles.spawnFloatingText(e.x, 2.0, e.y, label, isCrit ? '#ffd700' : (step === 2 ? '#ff9955' : '#ffffff'), isCrit || step > 0);
@@ -300,12 +368,8 @@ export class CombatSystem {
         const dy = p.y - player.y;
         if (Math.hypot(dx, dy) <= reach + 0.8) {
           p.hp -= totalDamage;
-          if (p.hp <= 0 && p.mesh) {
-            sound.breakProp();
-            particles.spawnBurst(p.x, 0.6, p.y, 14, 0x8a5438, 4);
-            p.mesh.visible = false;
-            player.gold += Math.floor(1 + Math.random() * 4);
-            sound.coin();
+          if (p.hp <= 0) {
+            this.triggerPropDestruction(p, player, enemies);
           }
         }
       }
@@ -929,6 +993,22 @@ export class CombatSystem {
 
     e.attackCount = (e.attackCount || 0) + 1;
 
+    // Helper to deal damage to player and process Elite Affixes (e.g. Vampiric lifesteal)
+    const dealEnemyDmg = (rawDmg: number, label?: string, isCrit = false): number => {
+      const dmg = player.takeDamage(rawDmg);
+      if (dmg > 0) {
+        sound.playerHurt();
+        particles.spawnFloatingText(player.x, 2.2, player.y, label ? `-${dmg} ${label}` : `-${dmg}`, '#ff3b30', isCrit);
+        if (e.stats.affix === 'vampiric') {
+          const healAmt = Math.round(dmg * 0.65);
+          e.hp = Math.min(e.maxHp, e.hp + healAmt);
+          particles.spawnFloatingText(e.x, 2.2, e.y, `+${healAmt} 🩸 VAMPIRISMO`, '#dc2626', true);
+          particles.spawnBurst(e.x, 1.0, e.y, 8, 0xdc2626, 3);
+        }
+      }
+      return dmg;
+    };
+
     // --- 1. BOSS SPECIAL MOVESETS ---
 
     // Boss 1: Capitano Grummak il Frantumatore (4 Distinct Attack Patterns)
@@ -937,16 +1017,12 @@ export class CombatSystem {
 
       if (pattern === 0) {
         // Pattern A: Earthquake Slam (Massive 5.5m ground shockwave AoE)
-        telegraphs.createCircle(e.x, e.y, 5.5, 1.0, 0x853229, () => {
+        telegraphs.createCircle(e.x, e.y, 5.5, 0.75, 0x853229, () => {
           sound.heavyChop();
           particles.spawnShockwave(e.x, e.y, 5.5, 0x853229, 0.4);
           particles.spawnBurst(e.x, 1.2, e.y, 35, 0xff5533, 8);
           if (Math.hypot(player.x - e.x, player.y - e.y) <= 5.5) {
-            const dmg = player.takeDamage(Math.round(e.stats.damage * 1.5));
-            if (dmg > 0) {
-              sound.playerHurt();
-              particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg} TERREMOTO!`, '#ff3b30', true);
-            }
+            dealEnemyDmg(Math.round(e.stats.damage * 1.5), 'TERREMOTO!', true);
           }
         });
       } else if (pattern === 1) {
@@ -961,17 +1037,13 @@ export class CombatSystem {
         }
       } else if (pattern === 2) {
         // Pattern C: Bull Charge & Impact Crash
-        telegraphs.createCircle(targetX, targetY, 2.6, 0.75, 0xff3b30, () => {
+        telegraphs.createCircle(targetX, targetY, 2.6, 0.6, 0xff3b30, () => {
           e.knockbackX = dirX * 22;
           e.knockbackY = dirY * 22;
           sound.heavyChop();
           particles.spawnShockwave(targetX, targetY, 3.0, 0xff3b30, 0.3);
           if (Math.hypot(player.x - targetX, player.y - targetY) < 2.6) {
-            const dmg = player.takeDamage(Math.round(e.stats.damage * 1.4));
-            if (dmg > 0) {
-              sound.playerHurt();
-              particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg} CARICA!`, '#ff3b30', true);
-            }
+            dealEnemyDmg(Math.round(e.stats.damage * 1.4), 'CARICA!', true);
           }
         });
       } else {
@@ -979,11 +1051,7 @@ export class CombatSystem {
         sound.heavyChop();
         particles.spawnShockwave(e.x + dirX * 1.8, e.y + dirY * 1.8, 3.4, 0xff5533, 0.25);
         if (dist <= 3.8) {
-          const dmg = player.takeDamage(Math.round(e.stats.damage * 1.25));
-          if (dmg > 0) {
-            sound.playerHurt();
-            particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg}`, '#ff3b30', true);
-          }
+          dealEnemyDmg(Math.round(e.stats.damage * 1.25), undefined, true);
         }
       }
       return;
@@ -997,16 +1065,12 @@ export class CombatSystem {
         // Pattern A: Soul Nova (Targeted ethereal vortex under the player)
         const sx = targetX;
         const sy = targetY;
-        telegraphs.createCircle(sx, sy, 3.6, 1.1, 0x00ffff, () => {
+        telegraphs.createCircle(sx, sy, 3.6, 0.8, 0x00ffff, () => {
           sound.mageBlast();
           particles.spawnShockwave(sx, sy, 3.8, 0x00ffff, 0.35);
           particles.spawnBurst(sx, 1.5, sy, 30, 0x00ffff, 7);
           if (Math.hypot(player.x - sx, player.y - sy) <= 3.6) {
-            const dmg = player.takeDamage(Math.round(e.stats.damage * 1.55));
-            if (dmg > 0) {
-              sound.playerHurt();
-              particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg} NOVA D'ANIMA!`, '#00ffff', true);
-            }
+            dealEnemyDmg(Math.round(e.stats.damage * 1.55), "NOVA D'ANIMA!", true);
           }
         });
       } else if (pattern === 1) {
@@ -1030,23 +1094,15 @@ export class CombatSystem {
         sound.swing();
         particles.spawnShockwave(e.x, e.y, 3.0, 0x4de0e8, 0.25);
         if (Math.hypot(player.x - e.x, player.y - e.y) <= 3.0) {
-          const dmg = player.takeDamage(Math.round(e.stats.damage * 1.2));
-          if (dmg > 0) {
-            sound.playerHurt();
-            particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg} AGGUATO!`, '#00ffff', true);
-          }
+          dealEnemyDmg(Math.round(e.stats.damage * 1.2), 'AGGUATO!', true);
         }
       } else {
         // Pattern D: Wail of the Banshee (Large AoE Shockwave around her)
-        telegraphs.createCircle(e.x, e.y, 6.0, 0.9, 0x4de0e8, () => {
+        telegraphs.createCircle(e.x, e.y, 6.0, 0.7, 0x4de0e8, () => {
           sound.dragonRoar();
           particles.spawnShockwave(e.x, e.y, 6.0, 0x4de0e8, 0.4);
           if (Math.hypot(player.x - e.x, player.y - e.y) <= 6.0) {
-            const dmg = player.takeDamage(Math.round(e.stats.damage * 1.35));
-            if (dmg > 0) {
-              sound.playerHurt();
-              particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg} URLO SPIRITUALE!`, '#4de0e8', true);
-            }
+            dealEnemyDmg(Math.round(e.stats.damage * 1.35), 'URLO SPIRITUALE!', true);
           }
         });
       }
@@ -1059,16 +1115,12 @@ export class CombatSystem {
 
       if (pattern === 0) {
         // Pattern A: Toxic Ground Pound (Huge poisonous AoE)
-        telegraphs.createCircle(e.x, e.y, 5.5, 1.05, 0x567d36, () => {
+        telegraphs.createCircle(e.x, e.y, 5.5, 0.8, 0x567d36, () => {
           sound.heavyChop();
           particles.spawnShockwave(e.x, e.y, 5.5, 0x3d5c38, 0.4);
           particles.spawnBurst(e.x, 1.2, e.y, 32, 0x567d36, 8);
           if (Math.hypot(player.x - e.x, player.y - e.y) <= 5.5) {
-            const dmg = player.takeDamage(Math.round(e.stats.damage * 1.5));
-            if (dmg > 0) {
-              sound.playerHurt();
-              particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg} IMPATTO TOSSICO!`, '#567d36', true);
-            }
+            dealEnemyDmg(Math.round(e.stats.damage * 1.5), 'IMPATTO TOSSICO!', true);
           }
         });
       } else if (pattern === 1) {
@@ -1079,17 +1131,13 @@ export class CombatSystem {
         this.spawnProjectile(e.x + dirX * 1.0, e.y + dirY * 1.0, vx, vy, 0.65, Math.round(e.stats.damage * 1.35), false, 0x4a4035, 0);
       } else if (pattern === 2) {
         // Pattern C: Troll Rampage Stampede
-        telegraphs.createCircle(targetX, targetY, 2.8, 0.8, 0x567d36, () => {
+        telegraphs.createCircle(targetX, targetY, 2.8, 0.6, 0x567d36, () => {
           e.knockbackX = dirX * 22;
           e.knockbackY = dirY * 22;
           sound.heavyChop();
           particles.spawnShockwave(targetX, targetY, 3.2, 0x567d36, 0.3);
           if (Math.hypot(player.x - targetX, player.y - targetY) < 2.8) {
-            const dmg = player.takeDamage(Math.round(e.stats.damage * 1.4));
-            if (dmg > 0) {
-              sound.playerHurt();
-              particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg} TRAVOLGIMENTO!`, '#8f2d25', true);
-            }
+            dealEnemyDmg(Math.round(e.stats.damage * 1.4), 'TRAVOLGIMENTO!', true);
           }
         });
       } else {
@@ -1097,11 +1145,7 @@ export class CombatSystem {
         sound.heavyChop();
         particles.spawnShockwave(e.x + dirX * 2.0, e.y + dirY * 2.0, 3.8, 0x8a5438, 0.3);
         if (dist <= 4.2) {
-          const dmg = player.takeDamage(Math.round(e.stats.damage * 1.25));
-          if (dmg > 0) {
-            sound.playerHurt();
-            particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg}`, '#ff3b30', true);
-          }
+          dealEnemyDmg(Math.round(e.stats.damage * 1.25), undefined, true);
         }
       }
       return;
@@ -1136,46 +1180,34 @@ export class CombatSystem {
         meteorOffsets.forEach((off) => {
           const mx = targetX + off.ox;
           const my = targetY + off.oy;
-          telegraphs.createCircle(mx, my, 2.8, 1.15, 0xff3300, () => {
+          telegraphs.createCircle(mx, my, 2.8, 0.85, 0xff3300, () => {
             sound.fireball();
             particles.spawnShockwave(mx, my, 3.2, 0xff4400, 0.35);
             particles.spawnBurst(mx, 1.5, my, 25, 0xff5500, 8);
             if (Math.hypot(player.x - mx, player.y - my) <= 2.8) {
-              const dmg = player.takeDamage(Math.round(e.stats.damage * 1.5));
-              if (dmg > 0) {
-                sound.playerHurt();
-                particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg} METEORA!`, '#ff4400', true);
-              }
+              dealEnemyDmg(Math.round(e.stats.damage * 1.5), 'METEORA!', true);
             }
           });
         });
       } else if (pattern === 2) {
         // Pattern C: Inferno Cataclysm (Devastating 7.5m AoE blast)
-        telegraphs.createCircle(e.x, e.y, 7.5, 1.3, 0xff1100, () => {
+        telegraphs.createCircle(e.x, e.y, 7.5, 0.95, 0xff1100, () => {
           sound.dragonRoar();
           particles.spawnShockwave(e.x, e.y, 7.5, 0xff2200, 0.5);
           particles.spawnBurst(e.x, 1.8, e.y, 45, 0xff5500, 10);
           if (Math.hypot(player.x - e.x, player.y - e.y) <= 7.5) {
-            const dmg = player.takeDamage(Math.round(e.stats.damage * 1.75));
-            if (dmg > 0) {
-              sound.playerHurt();
-              particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg} CATACLISMA!`, '#ff2200', true);
-            }
+            dealEnemyDmg(Math.round(e.stats.damage * 1.75), 'CATACLISMA!', true);
           }
         });
       } else {
         // Pattern D: Wing Buffet Charge
-        telegraphs.createCircle(targetX, targetY, 3.2, 0.8, 0xff6600, () => {
+        telegraphs.createCircle(targetX, targetY, 3.2, 0.6, 0xff6600, () => {
           e.knockbackX = dirX * 24;
           e.knockbackY = dirY * 24;
           sound.dragonRoar();
           particles.spawnShockwave(targetX, targetY, 3.8, 0xff5500, 0.35);
           if (Math.hypot(player.x - targetX, player.y - targetY) < 3.2) {
-            const dmg = player.takeDamage(Math.round(e.stats.damage * 1.4));
-            if (dmg > 0) {
-              sound.playerHurt();
-              particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg} PICCHIATA!`, '#ff5500', true);
-            }
+            dealEnemyDmg(Math.round(e.stats.damage * 1.4), 'PICCHIATA!', true);
           }
         });
       }
@@ -1200,12 +1232,7 @@ export class CombatSystem {
           }
 
           const mult = isLunge ? 1.25 : 1.0;
-          const dmg = player.takeDamage(Math.round(e.stats.damage * mult));
-          if (dmg > 0) {
-            sound.playerHurt();
-            particles.spawnBurst(player.x, 1.0, player.y, 10, 0xff3b30, 5);
-            particles.spawnFloatingText(player.x, 2.2, player.y, isLunge ? `-${dmg} AFFONDO!` : `-${dmg}`, '#ff3b30', isLunge);
-          }
+          dealEnemyDmg(Math.round(e.stats.damage * mult), isLunge ? 'AFFONDO!' : undefined, isLunge);
         }
         break;
       }
@@ -1256,21 +1283,13 @@ export class CombatSystem {
           // Close-quarters frenzy strike
           sound.heavyChop();
           particles.spawnBurst(player.x, 1.0, player.y, 14, 0x8f2d25, 5);
-          const dmg = player.takeDamage(Math.round(e.stats.damage * 1.3));
-          if (dmg > 0) {
-            sound.playerHurt();
-            particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg} FURIA!`, '#8f2d25', true);
-          }
+          dealEnemyDmg(Math.round(e.stats.damage * 1.3), 'FURIA!', true);
         } else {
-          telegraphs.createCircle(targetX, targetY, 2.2, 0.7, 0xff3b30, () => {
+          telegraphs.createCircle(targetX, targetY, 2.2, 0.55, 0xff3b30, () => {
             e.knockbackX = dirX * 19;
             e.knockbackY = dirY * 19;
             if (Math.hypot(player.x - targetX, player.y - targetY) < 2.2) {
-              const dmg = player.takeDamage(Math.round(e.stats.damage * 1.3));
-              if (dmg > 0) {
-                sound.playerHurt();
-                particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg}`, '#ff3b30', true);
-              }
+              dealEnemyDmg(Math.round(e.stats.damage * 1.3));
             }
           });
         }
@@ -1278,15 +1297,11 @@ export class CombatSystem {
       }
 
       case 'aoe': {
-        telegraphs.createCircle(e.x, e.y, 5.0, 1.2, 0xff3b30, () => {
+        telegraphs.createCircle(e.x, e.y, 5.0, 0.8, 0xff3b30, () => {
           particles.spawnShockwave(e.x, e.y, 5.0, 0xff3b30);
           particles.spawnBurst(e.x, 1.0, e.y, 30, 0xff3b30, 8);
           if (Math.hypot(player.x - e.x, player.y - e.y) <= 5.0) {
-            const dmg = player.takeDamage(Math.round(e.stats.damage * 1.5));
-            if (dmg > 0) {
-              sound.playerHurt();
-              particles.spawnFloatingText(player.x, 2.2, player.y, `-${dmg}`, '#ff3b30', true);
-            }
+            dealEnemyDmg(Math.round(e.stats.damage * 1.5));
           }
         });
         break;
@@ -1410,15 +1425,14 @@ export class CombatSystem {
         let propHit = false;
         if (room && room.props) {
           for (const pr of room.props) {
-            if (pr.hp <= 0 || !pr.mesh || pr.type === 'chest' || pr.type === 'shrine') continue;
+            if (pr.hp <= 0 || !pr.mesh || pr.type === 'chest' || pr.type === 'shrine' || pr.type === 'shop_counter' || pr.type === 'teleport_pad' || pr.type === 'skill_crucible' || pr.type === 'pact_altar' || pr.type === 'cage' || pr.type === 'spike_trap') continue;
             if (Math.hypot(pr.x - p.x, pr.y - p.y) <= 0.8 + p.radius) {
               pr.hp -= p.damage;
-              sound.breakProp();
-              particles.spawnBurst(pr.x, 0.6, pr.y, 14, 0x8a5438, 4);
               if (pr.hp <= 0) {
-                pr.mesh.visible = false;
-                player.gold += Math.floor(1 + Math.random() * 4);
-                sound.coin();
+                this.triggerPropDestruction(pr, player, enemies);
+              } else {
+                sound.breakProp();
+                particles.spawnBurst(pr.x, 0.6, pr.y, 10, 0x8a5438, 3);
               }
               this.group.remove(p.mesh);
               p.mesh.geometry.dispose();

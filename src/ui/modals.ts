@@ -10,6 +10,9 @@ import type { ClassId, FeatUpgrade, Item, ItemSlot, CharacterStats, SkillAugment
 import type { Player } from '../entities/player.ts';
 import type { DungeonRoom } from '../world/dungeonGenerator.ts';
 import { sound } from '../audio/soundEngine.ts';
+import { metaProgression, META_UPGRADES } from '../state/metaProgression.ts';
+import { getRandomPacts } from '../items/pactsDatabase.ts';
+import { BESTIARY_DATA, WEAPON_COMPENDIUM } from '../items/codexDatabase.ts';
 
 export interface LeaderboardEntry {
   name: string;
@@ -94,6 +97,9 @@ export class ModalManager {
   private mapPanel: HTMLElement | null = null;
   private skillAugmentsPanel: HTMLElement | null = null;
   private shopPanel: HTMLElement | null = null;
+  private sanctumPanel: HTMLElement | null = null;
+  private pactsPanel: HTMLElement | null = null;
+  private codexPanel: HTMLElement | null = null;
 
   public settings: GameSettings = { ...DEFAULT_SETTINGS };
   private selectedBagIndex: number = 0;
@@ -119,6 +125,9 @@ export class ModalManager {
     this.mapPanel = document.getElementById('panel-map');
     this.skillAugmentsPanel = document.getElementById('panel-skill-augments');
     this.shopPanel = document.getElementById('panel-shop');
+    this.sanctumPanel = document.getElementById('panel-sanctum');
+    this.pactsPanel = document.getElementById('panel-pacts');
+    this.codexPanel = document.getElementById('panel-codex');
 
     this.loadSettings();
   }
@@ -136,7 +145,10 @@ export class ModalManager {
       this.messagePanel,
       this.mapPanel,
       this.skillAugmentsPanel,
-      this.shopPanel
+      this.shopPanel,
+      this.sanctumPanel,
+      this.pactsPanel,
+      this.codexPanel
     ].forEach(p => {
       if (p) p.style.display = 'none';
     });
@@ -168,7 +180,11 @@ export class ModalManager {
     bindClick('intro-btn-leaderboard', () => this.showLeaderboard());
     // 3. Comandi & Guida
     bindClick('intro-btn-guide', () => this.showGuide());
-    // 4. Impostazioni
+    // 4. Santuario Ancestrale (Meta-Progressione)
+    bindClick('intro-btn-sanctum', () => this.showSanctum());
+    // 5. Bestiario & Compendio Armi
+    bindClick('intro-btn-codex', () => this.showCodex());
+    // 6. Impostazioni
     bindClick('intro-btn-settings', () => this.showSettings());
   }
 
@@ -1376,6 +1392,307 @@ export class ModalManager {
     };
 
     renderShopContent();
+  }
+
+  // --- 8. ANCESTRAL SANCTUM (Meta-Progression & Permanent Upgrades) ---
+  public showSanctum(): void {
+    this.hideAll();
+    if (!this.overlay || !this.sanctumPanel) return;
+
+    this.overlay.classList.add('active');
+    this.sanctumPanel.style.display = 'flex';
+
+    const renderSanctum = () => {
+      const essence = metaProgression.getEssence();
+      const meta = metaProgression.getData();
+
+      let html = `
+        <div class="sanctum-modal-content">
+          <div class="sanctum-header">
+            <div class="sanctum-title-wrap">
+              <span class="sanctum-crest">🏛️</span>
+              <div>
+                <h2 class="sanctum-title">Santuario Ancestrale dei Renegades</h2>
+                <p class="sanctum-subtitle">Canalizza l'Essenza Astrale raccolta nelle spedizioni per infondere benedizioni permanenti ai tuoi eroi.</p>
+              </div>
+            </div>
+            <div class="sanctum-essence-badge">
+              <span class="essence-sparkle">✨</span>
+              <span class="essence-label">Essenza Astrale:</span>
+              <span class="essence-value">${essence}</span>
+            </div>
+          </div>
+
+          <div class="sanctum-grid">
+      `;
+
+      META_UPGRADES.forEach(u => {
+        const currentRank = meta.upgrades[u.id] || 0;
+        const maxLvl = u.maxLevel || u.maxRank;
+        const isMax = currentRank >= maxLvl;
+        const nextCost = metaProgression.getUpgradeCost(u.id);
+        const canBuy = !isMax && essence >= nextCost;
+        const currDesc = u.perLevelDesc ? u.perLevelDesc(currentRank) : `Grado ${currentRank}`;
+        const nextDesc = u.perLevelDesc ? u.perLevelDesc(currentRank + 1) : `Grado ${currentRank + 1}`;
+
+        html += `
+          <div class="sanctum-card ${isMax ? 'sanctum-max' : ''}">
+            <div class="sanctum-card-header">
+              <span class="sanctum-card-icon">${u.icon}</span>
+              <div class="sanctum-card-titles">
+                <h3 class="sanctum-card-name">${u.name}</h3>
+                <span class="sanctum-card-rank">Grado ${currentRank} / ${maxLvl}</span>
+              </div>
+            </div>
+            <p class="sanctum-card-desc">${u.desc}</p>
+            <div class="sanctum-card-stat">
+              <span>Effetto Attuale: <b>${currDesc}</b></span>
+              ${!isMax ? `<span class="next-stat">Prossimo: <b>${nextDesc}</b></span>` : ''}
+            </div>
+            <div class="sanctum-card-footer">
+              <div class="sanctum-cost-label">
+                ${isMax ? '🏆 <span class="text-gold">Grado Massimo</span>' : `Costo: ✨ <b>${nextCost}</b> Essenza`}
+              </div>
+              <button class="btn-sanctum-buy ${canBuy ? 'active' : 'disabled'}" data-upgrade-id="${u.id}" ${!canBuy ? 'disabled' : ''}>
+                ${isMax ? 'Completato' : 'Sblocca Grado'}
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      html += `
+          </div>
+
+          <div class="sanctum-stats-footer">
+            <div class="sanctum-run-stats">
+              Spedizioni Totali: <b>${meta.totalRuns}</b> · Boss Sconfitti: <b>${meta.bossesDefeated}</b> · Nemici Abbattuti: <b>${meta.totalKills}</b>
+            </div>
+            <button id="btn-back-from-sanctum" class="btn-back">⬅️ Torna al Menu Principale</button>
+          </div>
+        </div>
+      `;
+
+      this.sanctumPanel!.innerHTML = html;
+
+      document.getElementById('btn-back-from-sanctum')?.addEventListener('click', () => {
+        this.showIntro();
+      });
+
+      this.sanctumPanel!.querySelectorAll<HTMLButtonElement>('.btn-sanctum-buy.active').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const uId = btn.dataset.upgradeId;
+          if (uId && metaProgression.purchaseUpgrade(uId)) {
+            sound.levelUp();
+            renderSanctum();
+          }
+        });
+      });
+    };
+
+    renderSanctum();
+  }
+
+  // --- 9. DARK PACTS (Patti con l'Ombra / Altare delle Ombre) ---
+  public showDarkPacts(player: Player, onChosen?: (pact: any) => void): void {
+    this.hideAll();
+    if (!this.overlay || !this.pactsPanel) return;
+
+    this.overlay.classList.add('active');
+    this.pactsPanel.style.display = 'flex';
+
+    const pacts = getRandomPacts(3);
+
+    let html = `
+      <div class="pacts-modal-content">
+        <div class="pacts-header">
+          <div class="pacts-crest">🔮</div>
+          <h2 class="pacts-title">PATTO OSCURO DELL'ABISSO</h2>
+          <p class="pacts-subtitle">L'Altare delle Ombre risponde alla tua brama di potere. Accetta una grave maledizione per ottenere una benedizione proibita per il resto della spedizione.</p>
+        </div>
+
+        <div class="pacts-grid">
+    `;
+
+    pacts.forEach(pact => {
+      html += `
+        <div class="pact-card">
+          <div class="pact-card-glow"></div>
+          <div class="pact-icon-wrap">${pact.icon}</div>
+          <h3 class="pact-name">${pact.name}</h3>
+          <p class="pact-flavor">"${pact.flavor || pact.curseTitle}"</p>
+
+          <div class="pact-effect-box boon">
+            <span class="pact-effect-label">✨ ${pact.boonTitle.toUpperCase()}:</span>
+            <span class="pact-effect-text">${pact.boonDesc}</span>
+          </div>
+
+          <div class="pact-effect-box curse">
+            <span class="pact-effect-label">💀 ${pact.curseTitle.toUpperCase()}:</span>
+            <span class="pact-effect-text">${pact.curseDesc}</span>
+          </div>
+
+          <button class="btn-seal-pact" data-pact-id="${pact.id}">
+            🩸 Sigilla il Patto
+          </button>
+        </div>
+      `;
+    });
+
+    html += `
+        </div>
+        <div class="pacts-footer-actions">
+          <button id="btn-reject-pact" class="btn-reject-pact">Allontanati dall'Altare (Rifiuta)</button>
+        </div>
+      </div>
+    `;
+
+    this.pactsPanel.innerHTML = html;
+
+    document.getElementById('btn-reject-pact')?.addEventListener('click', () => {
+      this.close();
+      if (this.onResumeGame) this.onResumeGame();
+    });
+
+    this.pactsPanel.querySelectorAll<HTMLButtonElement>('.btn-seal-pact').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pId = btn.dataset.pactId;
+        const chosen = pacts.find(p => p.id === pId);
+        if (chosen) {
+          player.activePacts.push(chosen);
+          if (chosen.applyCurse) chosen.applyCurse(player);
+          if (chosen.applyBoon) chosen.applyBoon(player);
+          player.recalculateStats();
+          sound.playerHurt();
+          sound.levelUp();
+          this.close();
+          if (onChosen) onChosen(chosen);
+          if (this.onResumeGame) this.onResumeGame();
+        }
+      });
+    });
+  }
+
+  // --- 10. BESTIARY & WEAPONS CODEX ---
+  public showCodex(fromMenu: boolean = true): void {
+    this.hideAll();
+    if (!this.overlay || !this.codexPanel) return;
+
+    this.overlay.classList.add('active');
+    this.codexPanel.style.display = 'flex';
+
+    let currentTab: 'bestiary' | 'weapons' = 'bestiary';
+
+    const renderCodex = () => {
+      let contentHtml = '';
+
+      if (currentTab === 'bestiary') {
+        contentHtml = `
+          <div class="codex-grid bestiary-grid">
+            ${BESTIARY_DATA.map(m => `
+              <div class="bestiary-card">
+                <div class="bestiary-card-top">
+                  <span class="bestiary-avatar">${m.icon}</span>
+                  <div class="bestiary-card-titles">
+                    <h3 class="bestiary-name">${m.name}</h3>
+                    <div class="bestiary-badges">
+                      <span class="badge-role">${m.type}</span>
+                      <span class="badge-zone">${m.act}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="bestiary-stats-row">
+                  <span>❤️ PV: <b>${m.hp}</b></span>
+                  <span>⚔️ Danno: <b>${m.damage}</b></span>
+                </div>
+                <div class="bestiary-weakness">
+                  <span class="weak-lbl">🎯 Debolezza:</span>
+                  <span class="weak-val">${m.weakness}</span>
+                </div>
+                <p class="bestiary-lore">"${m.description}"</p>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      } else {
+        contentHtml = `
+          <div class="codex-grid weapons-grid">
+            ${WEAPON_COMPENDIUM.map(w => `
+              <div class="weapon-codex-card">
+                <div class="weapon-codex-header">
+                  <span class="weapon-codex-icon">${w.icon}</span>
+                  <div>
+                    <h3 class="weapon-codex-name">${w.name}</h3>
+                    <span class="weapon-codex-class">${w.classes} · ${w.style}</span>
+                  </div>
+                </div>
+                <div class="weapon-codex-pattern">
+                  <b>Scala Danno & Combo:</b> ${w.damageScale}
+                </div>
+                <p class="weapon-codex-lore">"${w.description}"</p>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      this.codexPanel!.innerHTML = `
+        <div class="codex-modal-content">
+          <div class="codex-header">
+            <div class="codex-title-wrap">
+              <span class="codex-crest">📖</span>
+              <div>
+                <h2 class="codex-title">Codex dei Renegades</h2>
+                <p class="codex-subtitle">Compendio di studio sulle creature di Okkarn e l'arsenale bellico a disposizione.</p>
+              </div>
+            </div>
+            <div class="codex-tabs">
+              <button id="btn-codex-tab-bestiary" class="btn-codex-tab ${currentTab === 'bestiary' ? 'active' : ''}">👹 Bestiario (${BESTIARY_DATA.length})</button>
+              <button id="btn-codex-tab-weapons" class="btn-codex-tab ${currentTab === 'weapons' ? 'active' : ''}">⚔️ Arsenale (${WEAPON_COMPENDIUM.length})</button>
+            </div>
+            <button id="btn-close-codex" class="modal-close-btn">&times;</button>
+          </div>
+
+          <div class="codex-body">
+            ${contentHtml}
+          </div>
+
+          <div class="modal-footer-actions">
+            <button id="btn-back-from-codex" class="btn-back">${fromMenu ? '⬅️ Torna al Menu Principale' : '✕ Chiudi e Riprendi'}</button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('btn-close-codex')?.addEventListener('click', () => {
+        if (fromMenu) {
+          this.showIntro();
+        } else {
+          this.close();
+          if (this.onResumeGame) this.onResumeGame();
+        }
+      });
+
+      document.getElementById('btn-back-from-codex')?.addEventListener('click', () => {
+        if (fromMenu) {
+          this.showIntro();
+        } else {
+          this.close();
+          if (this.onResumeGame) this.onResumeGame();
+        }
+      });
+
+      document.getElementById('btn-codex-tab-bestiary')?.addEventListener('click', () => {
+        currentTab = 'bestiary';
+        renderCodex();
+      });
+
+      document.getElementById('btn-codex-tab-weapons')?.addEventListener('click', () => {
+        currentTab = 'weapons';
+        renderCodex();
+      });
+    };
+
+    renderCodex();
   }
 
   public close(): void {
