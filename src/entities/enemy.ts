@@ -488,6 +488,11 @@ export class Enemy {
     }
     const attackProgress = this.attackAnimTimer > 0 ? (1.0 - this.attackAnimTimer / 0.45) : 0;
 
+    // Safety check: Guarantee enemy never stays inside a wall, pillar, chasm or prop
+    if (dungeon.isBlocked(room, this.x, this.y, this.radius)) {
+      dungeon.resolveEntityStuck(room, this);
+    }
+
     // Update 3D mesh position and animations
     this.mesh.position.set(this.x, 0, this.y);
     this.modelUpdate(performance.now() * 0.001, actualSpeed, attackProgress);

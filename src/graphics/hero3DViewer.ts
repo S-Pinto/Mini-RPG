@@ -70,10 +70,10 @@ export class Hero3DViewer {
 
     this.scene = new THREE.Scene();
 
-    // Perspective camera positioned to view full hero
-    this.camera = new THREE.PerspectiveCamera(36, this.canvas.clientWidth / (this.canvas.clientHeight || 1), 0.1, 50);
-    this.camera.position.set(0, 1.25, 3.8);
-    this.camera.lookAt(0, 1.0, 0);
+    // Perspective camera positioned to view full hero with generous headroom (no cutoff)
+    this.camera = new THREE.PerspectiveCamera(32, this.canvas.clientWidth / (this.canvas.clientHeight || 1), 0.1, 50);
+    this.camera.position.set(0, 1.22, 5.2);
+    this.camera.lookAt(0, 1.08, 0);
 
     // Studio Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.25);
@@ -180,8 +180,8 @@ export class Hero3DViewer {
 
   private updateSize(): void {
     if (!this.canvas || !this.renderer) return;
-    const width = this.canvas.clientWidth || 220;
-    const height = this.canvas.clientHeight || 260;
+    const width = this.canvas.clientWidth || 230;
+    const height = this.canvas.clientHeight || 270;
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.renderer.setSize(width, height, false);
       if (this.camera) {

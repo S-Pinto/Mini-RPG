@@ -303,6 +303,7 @@ export interface DestructibleProp {
   runeType?: 'fire' | 'frost' | 'arcane';
   runeActive?: boolean;
   sealedChestLocked?: boolean;
+  lastWarnTime?: number;
   secretRevealed?: boolean;
   tileX?: number;
   tileY?: number;

@@ -298,10 +298,10 @@ export class PhysicsEngine {
         const linvel = record.body.linvel();
         const impulseSpeed = Math.hypot(linvel.x, linvel.z);
         if (impulseSpeed > 0.2) {
-          // Physics impulse knockback actively in effect: update enemy coordinates from simulation
+          // Physics impulse knockback actively in effect: update enemy coordinates from simulation clamped to arena bounds
           const t = record.body.translation();
-          e.x = t.x;
-          e.y = t.z;
+          e.x = Math.max(e.radius + 1.0, Math.min(WORLD_W - e.radius - 1.0, t.x));
+          e.y = Math.max(e.radius + 1.0, Math.min(WORLD_H - e.radius - 1.0, t.z));
         } else {
           // Follow enemy navigation coordinates
           record.body.setTranslation({ x: e.x, y: 0.8, z: e.y }, true);

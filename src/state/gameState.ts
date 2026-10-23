@@ -131,6 +131,7 @@ export class GameState {
   private pendingWaveSpawns: { x: number; y: number; type: EnemyType; isElite?: boolean; affix?: EliteAffix }[] = [];
   private nearShopCounter = false;
   private onTeleportPad = false;
+  private nearCelestialForge = false;
 
   constructor() {
     this.currentZone = ZONES[ZONE_ORDER[this.currentZoneIndex]];
@@ -223,6 +224,9 @@ export class GameState {
     this.isWaveTransitionActive = false;
     this.waveSummonTimer = 0;
     this.pendingWaveSpawns = [];
+    this.nearShopCounter = false;
+    this.onTeleportPad = false;
+    this.nearCelestialForge = false;
 
     if (r.waypointName && !r.waypointUnlocked) {
       r.waypointUnlocked = true;
@@ -319,12 +323,14 @@ export class GameState {
     const actMult = 1.0 + (this.currentZone.actNumber - 1) * 0.85;
 
     if (r.type === 'boss') {
-      const boss = new Enemy(this.currentZone.bossType, WORLD_W / 2, WORLD_H * 0.35, actMult * 1.5);
+      const bossSpot = dungeon.findValidSpawnSpot(r, WORLD_W / 2, WORLD_H * 0.35, 1.8);
+      const boss = new Enemy(this.currentZone.bossType, bossSpot.x, bossSpot.y, actMult * 1.5);
       boss.onPhaseChange = (phase) => {
         if (phase === 2 && boss.type === 'boss_dragon_vermithrax') {
           // Spawn Gilded Kobold minions guarding Khloron!
           const spawnGilded = (ox: number, oy: number) => {
-            const kob = new Enemy('kobold_spearman', boss.x + ox, boss.y + oy, actMult * 1.25);
+            const sp = dungeon.findValidSpawnSpot(r, boss.x + ox, boss.y + oy, 0.65);
+            const kob = new Enemy('kobold_spearman', sp.x, sp.y, actMult * 1.25);
             kob.isGildedKobold = true;
             kob.stats.name = 'Accolito Dorato di Khloron';
             kob.stats.color = 0xffd700;
@@ -352,7 +358,16 @@ export class GameState {
       for (let i = 0; i < wave1Count; i++) {
         const pool = this.currentZone.enemyPool;
         const eType = pool[Math.floor(Math.random() * pool.length)];
-        const sp = spawnPoints[i % spawnPoints.length] || dungeon.findFreeSpot(r, this.player.x, this.player.y, 5.0);
+        const rawSp = spawnPoints[i % spawnPoints.length];
+        const sp = dungeon.findValidSpawnSpot(
+          r,
+          rawSp?.x,
+          rawSp?.y,
+          0.85,
+          this.player.x,
+          this.player.y,
+          5.0
+        );
         const isElite = isEliteArena && i === 0;
         const affix = isElite ? affixes[Math.floor(Math.random() * affixes.length)] : undefined;
         const enemy = new Enemy(eType, sp.x, sp.y, actMult * (isElite ? 1.4 : 1.0), affix);
@@ -697,7 +712,16 @@ export class GameState {
         for (let i = 0; i < wave2Count; i++) {
           const pool = this.currentZone.enemyPool;
           const eType = pool[Math.floor(Math.random() * pool.length)];
-          const sp = wave2Spots[i % wave2Spots.length] || dungeon.findFreeSpot(this.currentRoom, this.player.x, this.player.y, 5.0);
+          const rawSp = wave2Spots[i % wave2Spots.length];
+          const sp = dungeon.findValidSpawnSpot(
+            this.currentRoom,
+            rawSp?.x,
+            rawSp?.y,
+            0.85,
+            this.player.x,
+            this.player.y,
+            5.0
+          );
           const isElite = Math.random() < (0.28 + this.currentZone.actNumber * 0.1);
           const affix = isElite ? affixes[Math.floor(Math.random() * affixes.length)] : undefined;
           this.pendingWaveSpawns.push({ x: sp.x, y: sp.y, type: eType, isElite, affix });
@@ -1148,7 +1172,7 @@ export class GameState {
   }
 
   private checkPropInteractions(): void {
-    if (!this.currentRoom) return;
+    if (!this.currentRoom || modals.isOpen()) return;
 
     for (const p of this.currentRoom.props) {
       const dist = Math.hypot(p.x - this.player.x, p.y - this.player.y);
@@ -1228,20 +1252,27 @@ export class GameState {
           }
         }
       } else if (p.type === 'celestial_forge') {
-        if (dist < 2.2) {
+        if (dist < 2.2 && !this.nearCelestialForge && !modals.isOpen()) {
+          this.nearCelestialForge = true;
           sound.heavyChop();
           particles.spawnBurst(p.x, 1.0, p.y, 25, 0xf59e0b, 6);
           modals.showCelestialForge(this.player, () => {
             particles.spawnBurst(this.player.x, 1.2, this.player.y, 20, 0x38bdf8, 5);
           });
+        } else if (dist >= 3.0) {
+          this.nearCelestialForge = false;
         }
       } else if (dist < 1.8) {
         if (p.type === 'sealed_chest') {
           if (p.sealedChestLocked) {
             if (!p.opened) {
-              sound.breakProp();
-              particles.spawnShockwave(p.x, p.y, 2.0, 0xa855f7, 0.2);
-              particles.spawnFloatingText(p.x, 2.2, p.y, '🔒 SIGILLATO DALLE RUNE ELEMENTALI!', '#ec4899', true);
+              const nowSec = performance.now() / 1000;
+              if (nowSec - (p.lastWarnTime || 0) > 2.5) {
+                p.lastWarnTime = nowSec;
+                sound.breakProp();
+                particles.spawnShockwave(p.x, p.y, 2.0, 0xa855f7, 0.2);
+                particles.spawnFloatingText(p.x, 2.2, p.y, '🔒 SIGILLATO DALLE RUNE ELEMENTALI!', '#ec4899', true);
+              }
             }
           } else if (!p.opened) {
             p.opened = true;
@@ -1256,23 +1287,23 @@ export class GameState {
             const slots: ('weapon' | 'armor' | 'helm' | 'ring' | 'relic')[] = ['weapon', 'armor', 'helm', 'ring', 'relic'];
             const slot1 = slots[Math.floor(Math.random() * slots.length)];
             const item1 = generateItem(slot1, this.currentZone.actNumber, r1, this.player.classId);
-            this.spawnGroundLoot('item', p.x, p.y, undefined, item1);
+            this.spawnGroundLoot('item', p.x + 1.0, p.y, undefined, item1);
 
             const slot2 = slots[Math.floor(Math.random() * slots.length)];
             const item2 = generateItem(slot2, this.currentZone.actNumber, 'rare', this.player.classId);
-            this.spawnGroundLoot('item', p.x + 0.8, p.y, undefined, item2);
+            this.spawnGroundLoot('item', p.x - 1.0, p.y, undefined, item2);
 
-            this.spawnGroundLoot('exp', p.x, p.y - 0.7, 120);
-            this.spawnGroundLoot('coin', p.x - 0.6, p.y, 35);
-            this.spawnGroundLoot('coin', p.x + 0.6, p.y, 35);
-            this.spawnGroundLoot('heart', p.x, p.y + 0.7);
+            this.spawnGroundLoot('exp', p.x, p.y - 0.9, 120);
+            this.spawnGroundLoot('coin', p.x - 0.7, p.y + 0.7, 35);
+            this.spawnGroundLoot('coin', p.x + 0.7, p.y + 0.7, 35);
+            this.spawnGroundLoot('heart', p.x, p.y + 0.9);
           }
         } else if (p.type === 'chest' && !p.opened) {
           p.opened = true;
           sound.chestOpen();
           particles.spawnBurst(p.x, 1.0, p.y, 25, 0xffd700, 6);
           const item = generateItem('weapon', this.currentZone.actNumber, 'rare', this.player.classId);
-          this.spawnGroundLoot('item', p.x, p.y, undefined, item);
+          this.spawnGroundLoot('item', p.x + 0.8, p.y, undefined, item);
           this.spawnGroundLoot('exp', p.x, p.y - 0.5, 45);
           this.spawnGroundLoot('heart', p.x, p.y + 0.5);
           this.spawnGroundLoot('coin', p.x - 0.5, p.y, 8);

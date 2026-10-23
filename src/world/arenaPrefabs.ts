@@ -90,18 +90,18 @@ function buildColosseumPrefab(): ArenaPrefab {
   ];
 
   const wave1Spawns = [
-    { x: 6 * TILE_SIZE, y: 3.5 * TILE_SIZE },
-    { x: 12 * TILE_SIZE, y: 3.5 * TILE_SIZE },
-    { x: 6 * TILE_SIZE, y: 8.5 * TILE_SIZE },
-    { x: 12 * TILE_SIZE, y: 8.5 * TILE_SIZE }
+    { x: 7.5 * TILE_SIZE, y: 3.5 * TILE_SIZE },
+    { x: 10.5 * TILE_SIZE, y: 3.5 * TILE_SIZE },
+    { x: 7.5 * TILE_SIZE, y: 8.5 * TILE_SIZE },
+    { x: 10.5 * TILE_SIZE, y: 8.5 * TILE_SIZE }
   ];
 
   const wave2Spawns = [
-    { x: 3.5 * TILE_SIZE, y: 6 * TILE_SIZE },
-    { x: 14.5 * TILE_SIZE, y: 6 * TILE_SIZE },
-    { x: 9 * TILE_SIZE, y: 3 * TILE_SIZE },
-    { x: 9 * TILE_SIZE, y: 9 * TILE_SIZE },
-    { x: 7 * TILE_SIZE, y: 6 * TILE_SIZE }
+    { x: 6.5 * TILE_SIZE, y: 6 * TILE_SIZE },
+    { x: 11.5 * TILE_SIZE, y: 6 * TILE_SIZE },
+    { x: 9 * TILE_SIZE, y: 4.5 * TILE_SIZE },
+    { x: 9 * TILE_SIZE, y: 7.5 * TILE_SIZE },
+    { x: 9 * TILE_SIZE, y: 6 * TILE_SIZE }
   ];
 
   const presetProps: DestructibleProp[] = [
@@ -152,17 +152,17 @@ function buildBridgeChasmPrefab(): ArenaPrefab {
   ];
 
   const wave1Spawns = [
-    { x: 9 * TILE_SIZE, y: 2.5 * TILE_SIZE },
+    { x: 9 * TILE_SIZE, y: 2.2 * TILE_SIZE },
     { x: 2.5 * TILE_SIZE, y: 6 * TILE_SIZE },
     { x: 15.5 * TILE_SIZE, y: 6 * TILE_SIZE }
   ];
 
   const wave2Spawns = [
-    { x: 7 * TILE_SIZE, y: 6 * TILE_SIZE },
-    { x: 11 * TILE_SIZE, y: 6 * TILE_SIZE },
-    { x: 9 * TILE_SIZE, y: 9.5 * TILE_SIZE },
-    { x: 2.5 * TILE_SIZE, y: 2.5 * TILE_SIZE },
-    { x: 15.5 * TILE_SIZE, y: 9.5 * TILE_SIZE }
+    { x: 8 * TILE_SIZE, y: 6 * TILE_SIZE },
+    { x: 10 * TILE_SIZE, y: 6 * TILE_SIZE },
+    { x: 9 * TILE_SIZE, y: 9.8 * TILE_SIZE },
+    { x: 2.5 * TILE_SIZE, y: 2.2 * TILE_SIZE },
+    { x: 15.5 * TILE_SIZE, y: 9.8 * TILE_SIZE }
   ];
 
   const presetProps: DestructibleProp[] = [
@@ -220,17 +220,18 @@ function buildQuadrantSanctuaryPrefab(): ArenaPrefab {
   ];
 
   const wave1Spawns = [
-    { x: 3 * TILE_SIZE, y: 2.5 * TILE_SIZE },
-    { x: 15 * TILE_SIZE, y: 2.5 * TILE_SIZE },
-    { x: 3 * TILE_SIZE, y: 9.5 * TILE_SIZE },
-    { x: 15 * TILE_SIZE, y: 9.5 * TILE_SIZE }
+    { x: 2 * TILE_SIZE + 1.0, y: 2 * TILE_SIZE + 1.0 },
+    { x: 16 * TILE_SIZE, y: 2 * TILE_SIZE + 1.0 },
+    { x: 2 * TILE_SIZE + 1.0, y: 10 * TILE_SIZE },
+    { x: 16 * TILE_SIZE, y: 10 * TILE_SIZE }
   ];
 
   const wave2Spawns = [
-    { x: 9 * TILE_SIZE, y: 2.5 * TILE_SIZE },
-    { x: 9 * TILE_SIZE, y: 9.5 * TILE_SIZE },
-    { x: 2.5 * TILE_SIZE, y: 6 * TILE_SIZE },
-    { x: 15.5 * TILE_SIZE, y: 6 * TILE_SIZE }
+    { x: 9 * TILE_SIZE, y: 2 * TILE_SIZE + 1.0 },
+    { x: 9 * TILE_SIZE, y: 10 * TILE_SIZE },
+    { x: 2 * TILE_SIZE + 1.0, y: 6 * TILE_SIZE + 1.0 },
+    { x: 16 * TILE_SIZE, y: 6 * TILE_SIZE + 1.0 },
+    { x: 9 * TILE_SIZE, y: 6 * TILE_SIZE + 1.0 }
   ];
 
   const presetProps: DestructibleProp[] = [
@@ -283,18 +284,18 @@ function buildCatacombLabyrinthPrefab(): ArenaPrefab {
   ];
 
   const wave1Spawns = [
-    { x: 5 * TILE_SIZE, y: 6 * TILE_SIZE },
-    { x: 13 * TILE_SIZE, y: 6 * TILE_SIZE },
-    { x: 9 * TILE_SIZE, y: 2.5 * TILE_SIZE },
-    { x: 9 * TILE_SIZE, y: 9.5 * TILE_SIZE }
+    { x: 9 * TILE_SIZE, y: 1.8 * TILE_SIZE },
+    { x: 9 * TILE_SIZE, y: 10.2 * TILE_SIZE },
+    { x: 7 * TILE_SIZE, y: 6 * TILE_SIZE + 1.0 },
+    { x: 11 * TILE_SIZE, y: 6 * TILE_SIZE + 1.0 }
   ];
 
   const wave2Spawns = [
-    { x: 2.5 * TILE_SIZE, y: 2.5 * TILE_SIZE },
-    { x: 15.5 * TILE_SIZE, y: 2.5 * TILE_SIZE },
-    { x: 2.5 * TILE_SIZE, y: 9.5 * TILE_SIZE },
-    { x: 15.5 * TILE_SIZE, y: 9.5 * TILE_SIZE },
-    { x: 9 * TILE_SIZE, y: 6 * TILE_SIZE }
+    { x: 2 * TILE_SIZE + 1.0, y: 1.8 * TILE_SIZE },
+    { x: 16 * TILE_SIZE, y: 1.8 * TILE_SIZE },
+    { x: 2 * TILE_SIZE + 1.0, y: 10.2 * TILE_SIZE },
+    { x: 16 * TILE_SIZE, y: 10.2 * TILE_SIZE },
+    { x: 9 * TILE_SIZE, y: 6 * TILE_SIZE + 1.0 }
   ];
 
   const presetProps: DestructibleProp[] = [
@@ -345,17 +346,17 @@ function buildRotundaPrefab(): ArenaPrefab {
   ];
 
   const wave1Spawns = [
-    { x: 6 * TILE_SIZE, y: 3.5 * TILE_SIZE },
-    { x: 12 * TILE_SIZE, y: 3.5 * TILE_SIZE },
-    { x: 6 * TILE_SIZE, y: 8.5 * TILE_SIZE },
-    { x: 12 * TILE_SIZE, y: 8.5 * TILE_SIZE }
+    { x: 7.5 * TILE_SIZE, y: 3.5 * TILE_SIZE },
+    { x: 10.5 * TILE_SIZE, y: 3.5 * TILE_SIZE },
+    { x: 7.5 * TILE_SIZE, y: 8.5 * TILE_SIZE },
+    { x: 10.5 * TILE_SIZE, y: 8.5 * TILE_SIZE }
   ];
 
   const wave2Spawns = [
-    { x: 4 * TILE_SIZE, y: 6 * TILE_SIZE },
-    { x: 14 * TILE_SIZE, y: 6 * TILE_SIZE },
-    { x: 9 * TILE_SIZE, y: 3 * TILE_SIZE },
-    { x: 9 * TILE_SIZE, y: 9 * TILE_SIZE }
+    { x: 9 * TILE_SIZE, y: 4.5 * TILE_SIZE },
+    { x: 9 * TILE_SIZE, y: 7.5 * TILE_SIZE },
+    { x: 7 * TILE_SIZE, y: 6 * TILE_SIZE + 1.0 },
+    { x: 11 * TILE_SIZE, y: 6 * TILE_SIZE + 1.0 }
   ];
 
   const presetProps: DestructibleProp[] = [

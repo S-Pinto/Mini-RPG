@@ -258,8 +258,90 @@ export class DungeonGenerator {
     r.tiles = tiles;
   }
 
+  /**
+   * Guarantees a completely free, unblocked spawn coordinate for an entity of given radius.
+   * If a preferred (x, y) is provided, it tests it first. If valid, uses it.
+   * Otherwise, finds the closest valid floor tile that is fully clear of walls, pillars, chasms, props, and doors.
+   */
+  public findValidSpawnSpot(
+    r: DungeonRoom,
+    preferredX?: number,
+    preferredY?: number,
+    radius = 0.75,
+    minFromPlayerX = 0,
+    minFromPlayerY = 0,
+    minDistFromPlayer = 0
+  ): { x: number; y: number } {
+    const safetyBuffer = radius + 0.35; // Generous safety margin to guarantee no wall clipping
+
+    // 1. If preferred coordinates given, check if they are completely safe
+    if (preferredX !== undefined && preferredY !== undefined) {
+      const withinRoom =
+        preferredX >= safetyBuffer + 1.2 &&
+        preferredX <= WORLD_W - safetyBuffer - 1.2 &&
+        preferredY >= safetyBuffer + 1.2 &&
+        preferredY <= WORLD_H - safetyBuffer - 1.2;
+
+      if (withinRoom && !this.isBlocked(r, preferredX, preferredY, safetyBuffer)) {
+        if (minDistFromPlayer <= 0 || Math.hypot(preferredX - minFromPlayerX, preferredY - minFromPlayerY) >= minDistFromPlayer) {
+          return { x: preferredX, y: preferredY };
+        }
+      }
+    }
+
+    // 2. Search all room tiles for valid positions
+    const doorPositions = [
+      { x: DOOR_CX, y: TILE_SIZE * 0.5 },
+      { x: DOOR_CX, y: (ROOM_HEIGHT - 0.5) * TILE_SIZE },
+      { x: TILE_SIZE * 0.5, y: DOOR_CY },
+      { x: (ROOM_WIDTH - 0.5) * TILE_SIZE, y: DOOR_CY }
+    ];
+
+    const candidates: { x: number; y: number; score: number }[] = [];
+    const targetX = preferredX ?? (WORLD_W / 2);
+    const targetY = preferredY ?? (WORLD_H / 2);
+
+    for (let ty = 1; ty < ROOM_HEIGHT - 1; ty++) {
+      for (let tx = 1; tx < ROOM_WIDTH - 1; tx++) {
+        if (r.tiles && r.tiles[ty] && r.tiles[ty][tx] === 0) {
+          const wx = tx * TILE_SIZE + TILE_SIZE / 2;
+          const wy = ty * TILE_SIZE + TILE_SIZE / 2;
+
+          // Check against walls, pillars, chasms, and props with full safety buffer
+          if (this.isBlocked(r, wx, wy, safetyBuffer)) continue;
+
+          // Do not spawn right in front of any doorway
+          if (doorPositions.some(d => Math.hypot(wx - d.x, wy - d.y) < 2.5)) continue;
+
+          // Check player distance if required
+          if (minDistFromPlayer > 0 && Math.hypot(wx - minFromPlayerX, wy - minFromPlayerY) < minDistFromPlayer) {
+            continue;
+          }
+
+          // Score by proximity to preferred position
+          const distToPreferred = Math.hypot(wx - targetX, wy - targetY);
+          candidates.push({ x: wx, y: wy, score: distToPreferred });
+        }
+      }
+    }
+
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => a.score - b.score);
+      const topPool = candidates.slice(0, Math.min(3, candidates.length));
+      const pick = topPool[Math.floor(Math.random() * topPool.length)];
+      return { x: pick.x, y: pick.y };
+    }
+
+    // 3. Fallback: Guaranteed safe center of room
+    return { x: DOOR_CX, y: DOOR_CY };
+  }
+
   // Find a guaranteed valid, non-blocked floor tile inside the room, avoiding overlapping props and door areas
   public findFreeSpot(r: DungeonRoom, minFromPlayerX = 0, minFromPlayerY = 0, minDist = 0): { x: number; y: number } {
+    return this.findValidSpawnSpot(r, undefined, undefined, 0.65, minFromPlayerX, minFromPlayerY, minDist);
+  }
+
+  public findFreeSpotLegacy(r: DungeonRoom, minFromPlayerX = 0, minFromPlayerY = 0, minDist = 0): { x: number; y: number } {
     const candidates: { x: number; y: number }[] = [];
     const relaxedCandidates: { x: number; y: number }[] = [];
 
@@ -1007,7 +1089,7 @@ export class DungeonGenerator {
   }
 
   // Smooth collision check with radius clamping
-  public isBlocked(r: DungeonRoom, x: number, y: number, radius = 0.4): boolean {
+  public isBlocked(r: DungeonRoom, x: number, y: number, radius = 0.4, checkProps = true): boolean {
     const minTx = Math.floor((x - radius) / TILE_SIZE);
     const maxTx = Math.floor((x + radius) / TILE_SIZE);
     const minTy = Math.floor((y - radius) / TILE_SIZE);
@@ -1016,19 +1098,87 @@ export class DungeonGenerator {
     for (let ty = minTy; ty <= maxTy; ty++) {
       for (let tx = minTx; tx <= maxTx; tx++) {
         if (tx < 0 || ty < 0 || tx >= ROOM_WIDTH || ty >= ROOM_HEIGHT) return true;
+        if (!r.tiles || !r.tiles[ty]) return true;
         const val = r.tiles[ty][tx];
         if (val === 1 || val === 2 || val === 4 || (val === 3 && !r.cleared)) {
           return true;
         }
       }
     }
+
+    if (checkProps && r.props) {
+      for (const pr of r.props) {
+        if (pr.hp <= 0 && (pr.type === 'explosive_barrel' || pr.type === 'toxic_barrel' || pr.type === 'barrel')) continue;
+        const propRadius = pr.type === 'sarcophagus' ? 1.0 : (pr.type === 'table' || pr.type === 'weapon_rack' ? 0.85 : 0.65);
+        if (Math.hypot(x - pr.x, y - pr.y) < radius + propRadius) {
+          return true;
+        }
+      }
+    }
+
     return false;
+  }
+
+  // Depenetrate / Unstuck entity if inside a wall, pillar, chasm or prop
+  public resolveEntityStuck(r: DungeonRoom, ent: { x: number; y: number; radius: number }): boolean {
+    if (!this.isBlocked(r, ent.x, ent.y, ent.radius)) {
+      return false;
+    }
+
+    // 1. Try 8 radial directions in increasing steps
+    const angles = [0, Math.PI / 4, Math.PI / 2, (3 * Math.PI) / 4, Math.PI, -(3 * Math.PI) / 4, -Math.PI / 2, -Math.PI / 4];
+    const distances = [0.35, 0.7, 1.2, 1.8, 2.6];
+
+    for (const dist of distances) {
+      for (const ang of angles) {
+        const testX = ent.x + Math.cos(ang) * dist;
+        const testY = ent.y + Math.sin(ang) * dist;
+        if (
+          testX >= ent.radius + 1.2 &&
+          testX <= WORLD_W - ent.radius - 1.2 &&
+          testY >= ent.radius + 1.2 &&
+          testY <= WORLD_H - ent.radius - 1.2 &&
+          !this.isBlocked(r, testX, testY, ent.radius)
+        ) {
+          ent.x = testX;
+          ent.y = testY;
+          return true;
+        }
+      }
+    }
+
+    // 2. Direct line sample toward guaranteed walkable center
+    const toCenterDx = DOOR_CX - ent.x;
+    const toCenterDy = DOOR_CY - ent.y;
+    const centerDist = Math.hypot(toCenterDx, toCenterDy) || 1;
+    const normX = toCenterDx / centerDist;
+    const normY = toCenterDy / centerDist;
+
+    for (let step = 0.5; step <= centerDist; step += 0.5) {
+      const testX = ent.x + normX * step;
+      const testY = ent.y + normY * step;
+      if (!this.isBlocked(r, testX, testY, ent.radius)) {
+        ent.x = testX;
+        ent.y = testY;
+        return true;
+      }
+    }
+
+    // Absolute fallback: safe room center
+    ent.x = DOOR_CX;
+    ent.y = DOOR_CY;
+    return true;
   }
 
   // Slide movement: moves an entity along valid collision axes without getting stuck
   public moveEntity(r: DungeonRoom, ent: { x: number; y: number; radius: number }, vx: number, vy: number): [boolean, boolean] {
     let bx = false;
     let by = false;
+
+    // If currently stuck, unstuck first
+    if (this.isBlocked(r, ent.x, ent.y, ent.radius)) {
+      this.resolveEntityStuck(r, ent);
+    }
 
     ent.x += vx;
     if (this.isBlocked(r, ent.x, ent.y, ent.radius)) {
@@ -1041,6 +1191,10 @@ export class DungeonGenerator {
       ent.y -= vy;
       by = true;
     }
+
+    // Keep firmly inside room boundaries
+    ent.x = Math.max(ent.radius + 1.0, Math.min(WORLD_W - ent.radius - 1.0, ent.x));
+    ent.y = Math.max(ent.radius + 1.0, Math.min(WORLD_H - ent.radius - 1.0, ent.y));
 
     return [bx, by];
   }

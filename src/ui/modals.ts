@@ -438,184 +438,171 @@ export class ModalManager {
       cleric: '🛡️'
     };
 
-    const roleBadges: Record<ClassId, string> = {
-      fighter: 'Mischia & Danno Fisico',
-      wizard: 'Incantatore DPS Devastante',
-      rogue: 'Agilità & Critici Furtivi',
-      paladin: 'Campione Sacro & Difesa',
-      cleric: 'Tempesta & Risanamento'
+    const weaponStyleLabels: Record<string, string> = {
+      sword_shield: 'Spada & Scudo',
+      greatsword_2h: 'Spadone a 2 Mani',
+      dual_swords: 'Doppie Lame',
+      staff_2h: 'Bastone a 2 Mani',
+      wand_tome: 'Bacchetta & Tomo',
+      dual_daggers: 'Doppi Pugnali',
+      bow: 'Arco & Frecce',
+      mace_shield: 'Mazza & Scudo Solare',
+      staff_holy: 'Bastone delle Tempeste'
     };
 
-    const renderShowcase = () => {
-      const classesList = Object.values(CLASSES_DATA);
+    const classesList = Object.values(CLASSES_DATA);
+
+    // ------------------------------------------------------------------
+    // STEP 1: Build static shell ONCE (Header + Tabs + Dynamic Slot)
+    // ------------------------------------------------------------------
+    container.innerHTML = `
+      <div class="class-showcase-wrapper" id="class-showcase-root" style="--accent:${CLASSES_DATA[this.selectedClassTab]?.color || '#ffd700'};">
+        <div class="class-modal-top-bar">
+          <button id="btn-back-from-class-select" class="btn-back-compact" title="Torna al Menu">
+            <span class="btn-back-arrow">⬅️</span>
+            <span>Menu</span>
+          </button>
+          <div class="class-modal-title-group">
+            <h2 class="class-modal-title">SCEGLI IL TUO EROE</h2>
+            <span class="class-modal-subtitle">Seleziona la Classe e confronta le 2 Specializzazioni</span>
+          </div>
+          <div class="class-count-chip">5 Classi D&amp;D</div>
+        </div>
+
+        <div class="class-tabs-bar no-scrollbar" id="class-tabs-bar">
+          ${classesList.map(c => `
+            <button class="class-tab-btn ${c.id === this.selectedClassTab ? 'active' : ''}"
+                    data-class-tab="${c.id}"
+                    style="--tab-color:${c.color};">
+              <span class="tab-icon">${classIcons[c.id]}</span>
+              <span class="tab-class-name">${c.name.toUpperCase()}</span>
+            </button>
+          `).join('')}
+        </div>
+
+        <div class="class-content-slot" id="class-content-slot"></div>
+      </div>
+    `;
+
+    // ------------------------------------------------------------------
+    // STEP 2: Render Dynamic Content for Selected Class (Direct & User-Friendly)
+    // ------------------------------------------------------------------
+    const renderClassContent = (isTabSwitch = false) => {
       const activeClass = CLASSES_DATA[this.selectedClassTab] || classesList[0];
       const sub0 = activeClass.subclasses[0];
       const sub1 = activeClass.subclasses[1];
+      const slot = document.getElementById('class-content-slot');
+      const root = document.getElementById('class-showcase-root');
+      if (!slot) return;
+      if (root) root.style.setProperty('--accent', activeClass.color);
 
-      container.innerHTML = `
-        <div class="class-showcase-wrapper" style="--accent:${activeClass.color};">
-          <!-- Top Bar Header with Integrated Back Button -->
-          <div class="class-modal-top-bar">
-            <button id="btn-back-from-class-select" class="btn-back-compact" title="Torna al Menu">
-              <span class="btn-back-arrow">⬅️</span>
-              <span>Menu</span>
+      const renderSubCard = (sub: typeof sub0, index: number, badgeText: string) => {
+        const weaponStyle = weaponStyleLabels[sub.weaponStyle] || sub.weaponStyle;
+        return `
+          <div class="subclass-duel-card">
+            <div class="sdc-header">
+              <div class="sdc-badge-pill">${badgeText}</div>
+              <h3 class="sdc-name">${sub.name}</h3>
+              <p class="sdc-desc-one-line">${sub.desc}</p>
+            </div>
+
+            <div class="sdc-main-specs">
+              <!-- ARMA CHE IMPUGNI (DIRETTO E PULITO) -->
+              <div class="sdc-spec-row weapon">
+                <span class="sdc-spec-icon">🗡️</span>
+                <div class="sdc-spec-text">
+                  <div class="sdc-spec-label">ARMA IMPUGNATA</div>
+                  <div class="sdc-spec-val">
+                    <b>${sub.weaponName}</b>
+                    <span class="sdc-style-badge">${weaponStyle}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SECONDA ABILITÀ [E] (DIRETTA E PULITA) -->
+              <div class="sdc-spec-row skill">
+                <span class="sdc-spec-icon">${sub.skill2.icon}</span>
+                <div class="sdc-spec-text">
+                  <div class="sdc-skill-header-line">
+                    <span class="sdc-spec-label">SECONDA ABILITÀ [ E ]</span>
+                    <span class="sdc-cd-badge">⏱ ${sub.skill2.cd}s Recupero</span>
+                  </div>
+                  <div class="sdc-spec-val"><b>${sub.skill2.name}</b></div>
+                  <p class="sdc-skill-desc">${sub.skill2.desc}</p>
+                </div>
+              </div>
+
+              <!-- TRATTO PASSIVO -->
+              <div class="sdc-spec-row passive">
+                <span class="sdc-spec-icon">📜</span>
+                <div class="sdc-spec-text">
+                  <div class="sdc-spec-label">TRATTO PASSIVO</div>
+                  <div class="sdc-passive-desc">${sub.bonusDesc}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- PULSANTE DIRETTO PER GIOCARE -->
+            <button class="btn-play-subclass sdc-play-btn" data-class="${activeClass.id}" data-sub="${index}">
+              <span>SCEGLI ${sub.name.toUpperCase()}</span>
+              <span class="sdc-play-arrow">➔</span>
             </button>
-            <div class="class-modal-title-group">
-              <h2 class="class-modal-title">SCEGLI IL TUO EROE</h2>
-              <span class="class-modal-subtitle">Seleziona classe e specializzazione per scendere nelle cripte di Okkarn</span>
+          </div>
+        `;
+      };
+
+      const html = `
+        <div class="hero-stage-layout">
+          <!-- TOP HERO STRIP: Banner Identità & Kit Comune -->
+          <div class="hero-header-banner">
+            <div class="hhb-left">
+              <div class="hero-crest-circle">
+                <span class="hero-crest-icon">${classIcons[activeClass.id]}</span>
+              </div>
+              <div class="hhb-title-group">
+                <div class="hhb-name-row">
+                  <h2 class="hero-name">${activeClass.name}</h2>
+                  <span class="hero-dnd-archetype">${activeClass.dndTitle}</span>
+                </div>
+                <div class="hhb-role-desc">${activeClass.role} · ${activeClass.description}</div>
+              </div>
             </div>
-            <div class="class-count-chip">5 Classi D&amp;D</div>
+
+            <div class="hhb-common-kit">
+              <span class="hhb-kit-label">KIT BASE CONDIVISO:</span>
+              <div class="hhb-kit-pill">
+                <span class="hhb-key">[Clic SX]</span>
+                <span>${activeClass.basicAttackName}</span>
+              </div>
+              <div class="hhb-kit-pill primary">
+                <span class="hhb-key">[ Q ]</span>
+                <span>${activeClass.skill1.name} (⏱ ${activeClass.skill1.cd}s)</span>
+              </div>
+            </div>
           </div>
 
-          <!-- Class Tabs Selector Row -->
-          <div class="class-tabs-bar no-scrollbar">
-            ${classesList.map(c => {
-              const isSelected = c.id === this.selectedClassTab;
-              return `
-                <button class="class-tab-btn ${isSelected ? 'active' : ''}" data-class-tab="${c.id}" style="--tab-color:${c.color};">
-                  <span class="tab-icon">${classIcons[c.id]}</span>
-                  <div class="tab-text-wrap">
-                    <span class="tab-class-name">${c.name}</span>
-                    <span class="tab-role-tag">${roleBadges[c.id]}</span>
-                  </div>
-                </button>
-              `;
-            }).join('')}
-          </div>
-
-          <!-- Hero Main Showcase Stage (2-Column Split) -->
-          <div class="hero-stage-layout">
-            <!-- Left Column: Hero Identity & Core Abilities -->
-            <div class="hero-identity-card">
-              <div class="hero-banner">
-                <div class="hero-crest-circle">
-                  <span class="hero-crest-icon">${classIcons[activeClass.id]}</span>
-                </div>
-                <div class="hero-title-group">
-                  <div class="hero-name-row">
-                    <h2 class="hero-name">${activeClass.name}</h2>
-                    <span class="hero-dnd-archetype">${activeClass.dndTitle}</span>
-                  </div>
-                  <span class="hero-role-pill">${activeClass.role}</span>
-                </div>
-              </div>
-
-              <p class="hero-lore-desc">${activeClass.description}</p>
-
-              <!-- Core Stats Grid -->
-              <div class="hero-stats-panel">
-                <div class="stat-pill"><span class="stat-icon">❤️</span> <span class="stat-label">Salute</span> <b>${activeClass.baseStats.hp}</b></div>
-                <div class="stat-pill"><span class="stat-icon">⚔️</span> <span class="stat-label">Danno</span> <b>${activeClass.baseStats.damage}</b></div>
-                <div class="stat-pill"><span class="stat-icon">🛡️</span> <span class="stat-label">Armatura</span> <b>${activeClass.baseStats.armor}</b></div>
-                <div class="stat-pill"><span class="stat-icon">🎯</span> <span class="stat-label">Critico</span> <b>${activeClass.baseStats.critChance}%</b></div>
-                <div class="stat-pill"><span class="stat-icon">⚡</span> <span class="stat-label">Velocità</span> <b>${activeClass.baseStats.speed}</b></div>
-              </div>
-
-              <!-- Base Combat Kit -->
-              <div class="hero-skills-block">
-                <div class="skill-row">
-                  <div class="skill-row-header">
-                    <span class="skill-badge-type">Base [Mouse SX]</span>
-                    <span class="skill-title">${activeClass.basicAttackName}</span>
-                  </div>
-                  <p class="skill-row-desc">${activeClass.basicAttackDesc}</p>
-                </div>
-                <div class="skill-row">
-                  <div class="skill-row-header">
-                    <span class="skill-badge-type primary">Primaria [Q]</span>
-                    <span class="skill-title">${activeClass.skill1.icon} ${activeClass.skill1.name}</span>
-                    <span class="skill-cd-badge">CD: ${activeClass.skill1.cd}s</span>
-                  </div>
-                  <p class="skill-row-desc">${activeClass.skill1.desc}</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Right Column: Subclass Specializations -->
-            <div class="hero-subclasses-card">
-              <div class="subclasses-header">
-                <h3 class="subclasses-main-title">🔮 SPECIALIZZAZIONI D&amp;D</h3>
-                <p class="subclasses-subtitle">Scegli la specializzazione per definire stile e abilità secondaria [E]:</p>
-              </div>
-
-              <div class="subclasses-choices">
-                <!-- Subclass 1 -->
-                <div class="subclass-option-card">
-                  <div class="sub-card-top">
-                    <div>
-                      <span class="sub-spec-title">${sub0.name}</span>
-                      <div class="sub-weapon-pill">⚔️ Arma: <i>${sub0.weaponName}</i></div>
-                    </div>
-                  </div>
-                  <div class="sub-skill-box">
-                    <div class="sub-skill-header">
-                      <span class="skill-badge-type secondary">Abilità [E]</span>
-                      <b class="sub-skill-name">${sub0.skill2.icon} ${sub0.skill2.name}</b>
-                      <span class="skill-cd-badge">CD: ${sub0.skill2.cd}s</span>
-                    </div>
-                    <p class="sub-skill-desc">${sub0.skill2.desc}</p>
-                  </div>
-                  <div class="sub-trait-row">
-                    <span class="sub-trait-icon">📜</span>
-                    <span class="sub-trait-text"><b>Passiva:</b> ${sub0.bonusDesc}</span>
-                  </div>
-                  <button class="btn-play-subclass" data-class="${activeClass.id}" data-sub="0">
-                    <span>⚔️ GIOCA COME ${sub0.name.toUpperCase()}</span>
-                    <span class="btn-arrow">➔</span>
-                  </button>
-                </div>
-
-                <!-- Subclass 2 -->
-                <div class="subclass-option-card">
-                  <div class="sub-card-top">
-                    <div>
-                      <span class="sub-spec-title">${sub1.name}</span>
-                      <div class="sub-weapon-pill">⚔️ Arma: <i>${sub1.weaponName}</i></div>
-                    </div>
-                  </div>
-                  <div class="sub-skill-box">
-                    <div class="sub-skill-header">
-                      <span class="skill-badge-type secondary">Abilità [E]</span>
-                      <b class="sub-skill-name">${sub1.skill2.icon} ${sub1.skill2.name}</b>
-                      <span class="skill-cd-badge">CD: ${sub1.skill2.cd}s</span>
-                    </div>
-                    <p class="sub-skill-desc">${sub1.skill2.desc}</p>
-                  </div>
-                  <div class="sub-trait-row">
-                    <span class="sub-trait-icon">📜</span>
-                    <span class="sub-trait-text"><b>Passiva:</b> ${sub1.bonusDesc}</span>
-                  </div>
-                  <button class="btn-play-subclass" data-class="${activeClass.id}" data-sub="1">
-                    <span>⚔️ GIOCA COME ${sub1.name.toUpperCase()}</span>
-                    <span class="btn-arrow">➔</span>
-                  </button>
-                </div>
-              </div>
-            </div>
+          <!-- SUBCLASSES DUEL GRID: Le due specializzazioni a tutto spazio -->
+          <div class="subclasses-duel-grid">
+            ${renderSubCard(sub0, 0, 'OPZIONE A')}
+            ${renderSubCard(sub1, 1, 'OPZIONE B')}
           </div>
         </div>
       `;
 
-      // Bind back button
-      container.querySelector('#btn-back-from-class-select')?.addEventListener('click', () => {
-        sound.btnClick();
-        this.showIntro();
-      });
+      slot.innerHTML = html;
+      bindContentEvents();
 
-      // Bind tab clicks
-      container.querySelectorAll<HTMLButtonElement>('.class-tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const tabId = btn.dataset.classTab as ClassId;
-          if (tabId && tabId !== this.selectedClassTab) {
-            this.selectedClassTab = tabId;
-            sound.btnClick();
-            renderShowcase();
-          }
-        });
-      });
+      if (isTabSwitch) {
+        slot.classList.remove('content-tab-swapped');
+        void slot.offsetWidth; // force reflow for smooth animation
+        slot.classList.add('content-tab-swapped');
+      }
+    };
 
-      // Bind play subclass clicks
-      container.querySelectorAll<HTMLButtonElement>('.btn-play-subclass').forEach(btn => {
+    const bindContentEvents = () => {
+      const slot = document.getElementById('class-content-slot');
+      if (!slot) return;
+      slot.querySelectorAll<HTMLButtonElement>('.btn-play-subclass').forEach(btn => {
         btn.addEventListener('click', () => {
           const classId = btn.dataset.class as ClassId;
           const subIndex = Number(btn.dataset.sub);
@@ -627,7 +614,24 @@ export class ModalManager {
       });
     };
 
-    renderShowcase();
+    container.querySelector('#btn-back-from-class-select')?.addEventListener('click', () => {
+      sound.btnClick();
+      this.showIntro();
+    });
+
+    container.querySelectorAll<HTMLButtonElement>('.class-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tabId = btn.dataset.classTab as ClassId;
+        if (!tabId || tabId === this.selectedClassTab) return;
+        container.querySelectorAll('.class-tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.selectedClassTab = tabId;
+        sound.btnClick();
+        renderClassContent(true);
+      });
+    });
+
+    renderClassContent(false);
   }
 
   // --- 2. Roguelike Feats Level-Up Card Selection (Class-Filtered & On-Demand) ---
@@ -1219,7 +1223,7 @@ export class ModalManager {
               <div class="paperdoll-stage">
                 <!-- 3D Player Character Live Stage -->
                 <div class="hero-3d-stage-wrap">
-                  <canvas id="hero-3d-canvas" class="hero-3d-canvas" width="220" height="260"></canvas>
+                  <canvas id="hero-3d-canvas" class="hero-3d-canvas" width="230" height="270"></canvas>
                   <div class="hero-3d-pedestal-glow"></div>
                   <div class="hero-3d-hint">🔄 Ruota l'eroe a 360°</div>
                 </div>
@@ -2536,6 +2540,10 @@ export class ModalManager {
     };
 
     renderForge();
+  }
+
+  public isOpen(): boolean {
+    return this.overlay ? this.overlay.classList.contains('active') : false;
   }
 
   public close(): void {
