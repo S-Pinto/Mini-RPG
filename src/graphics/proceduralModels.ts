@@ -805,6 +805,82 @@ export function buildHumanoid(
     };
 
     switch (model) {
+      case 'scythe': {
+        const scythe = new THREE.Group();
+        const shaft = new THREE.Mesh(GEO.cyl, woodMat);
+        shaft.scale.set(0.06, 2.3, 0.06);
+        shaft.position.set(0, 0.5, 0);
+
+        const socket = new THREE.Mesh(GEO.box, darkMetal);
+        socket.scale.set(0.18, 0.28, 0.18);
+        socket.position.set(0, 1.55, 0);
+
+        const blade = new THREE.Mesh(GEO.box, getLambert(bladeColor, emissiveColor));
+        blade.scale.set(0.06, 0.28, 1.35);
+        blade.position.set(0, 1.55, 0.65);
+        blade.rotation.x = -0.22;
+
+        const rune = new THREE.Mesh(GEO.box, getBasic(bladeColor, 0.95, true));
+        rune.scale.set(0.07, 0.08, 1.05);
+        rune.position.set(0, 1.55, 0.65);
+
+        scythe.add(shaft, socket, blade, rune);
+        scythe.rotation.x = Math.PI / 2;
+        weaponHolder.add(scythe);
+        break;
+      }
+
+      case 'halberd': {
+        const pole = new THREE.Group();
+        const shaft = new THREE.Mesh(GEO.cyl, woodMat);
+        shaft.scale.set(0.06, 2.4, 0.06);
+        shaft.position.set(0, 0.55, 0);
+
+        const topSpear = new THREE.Mesh(GEO.cone, getLambert(bladeColor, emissiveColor));
+        topSpear.scale.set(0.12, 0.75, 0.06);
+        topSpear.position.set(0, 1.95, 0);
+
+        const axeBlade = new THREE.Mesh(GEO.box, getLambert(bladeColor, emissiveColor));
+        axeBlade.scale.set(0.06, 0.55, 0.45);
+        axeBlade.position.set(0, 1.45, 0.24);
+
+        const rearHook = new THREE.Mesh(GEO.cone, goldMat);
+        rearHook.scale.set(0.08, 0.35, 0.08);
+        rearHook.position.set(0, 1.45, -0.2);
+        rearHook.rotation.x = -Math.PI / 2;
+
+        pole.add(shaft, topSpear, axeBlade, rearHook);
+        pole.rotation.x = Math.PI / 2;
+        weaponHolder.add(pole);
+        break;
+      }
+
+      case 'crossbow': {
+        const xbow = new THREE.Group();
+        const stock = new THREE.Mesh(GEO.box, woodMat);
+        stock.scale.set(0.12, 0.16, 1.1);
+        stock.position.set(0, 0, 0.35);
+
+        const prod = new THREE.Mesh(GEO.box, getLambert(bladeColor, emissiveColor));
+        prod.scale.set(1.1, 0.08, 0.1);
+        prod.position.set(0, 0.06, 0.78);
+
+        const stringL = new THREE.Mesh(GEO.cyl, goldMat);
+        stringL.scale.set(0.015, 0.6, 0.015);
+        stringL.position.set(-0.28, 0.06, 0.52);
+        stringL.rotation.z = 1.1;
+
+        const stringR = new THREE.Mesh(GEO.cyl, goldMat);
+        stringR.scale.set(0.015, 0.6, 0.015);
+        stringR.position.set(0.28, 0.06, 0.52);
+        stringR.rotation.z = -1.1;
+
+        xbow.add(stock, prod, stringL, stringR);
+        xbow.rotation.x = Math.PI / 2;
+        weaponHolder.add(xbow);
+        break;
+      }
+
       case 'axe': {
         const axe = new THREE.Group();
         const handle = new THREE.Mesh(GEO.cyl, woodMat);
@@ -908,6 +984,156 @@ export function buildHumanoid(
         claymore.add(blade, fullerRune, guard, guardGem, handle, gripRing, pommel);
         claymore.rotation.x = Math.PI / 2;
         weaponHolder.add(claymore);
+        break;
+      }
+
+      case 'crystal_greatsword': {
+        const cg = new THREE.Group();
+        const crystalBlade = new THREE.Mesh(new THREE.OctahedronGeometry(0.25, 0), getBasic(bladeColor, 0.85, true));
+        crystalBlade.scale.set(0.45, 2.9, 0.22);
+        crystalBlade.position.set(0, 1.25, 0);
+
+        const core = new THREE.Mesh(GEO.box, getBasic(0xffffff, 0.95, true));
+        core.scale.set(0.06, 1.8, 0.08);
+        core.position.set(0, 1.25, 0);
+
+        const guardRing = new THREE.Mesh(GEO.torus, goldMat);
+        guardRing.scale.set(0.44, 0.44, 0.05);
+        guardRing.rotation.x = Math.PI / 2;
+        guardRing.position.set(0, 0.08, 0);
+
+        const handle = new THREE.Mesh(GEO.cyl, darkMetal);
+        handle.scale.set(0.055, 0.65, 0.055);
+        handle.position.set(0, -0.32, 0);
+
+        const pommel = new THREE.Mesh(new THREE.OctahedronGeometry(0.14, 0), getBasic(bladeColor, 0.95, true));
+        pommel.position.set(0, -0.66, 0);
+
+        cg.add(crystalBlade, core, guardRing, handle, pommel);
+        cg.rotation.x = Math.PI / 2;
+        weaponHolder.add(cg);
+        break;
+      }
+
+      case 'katana': {
+        const kt = new THREE.Group();
+        const blade = new THREE.Mesh(GEO.box, getLambert(bladeColor, emissiveColor));
+        blade.scale.set(0.07, 1.95, 0.035);
+        blade.position.set(0.06, 0.95, 0);
+        blade.rotation.z = -0.06;
+
+        const hamon = new THREE.Mesh(GEO.box, getBasic(bladeColor, 0.95, true));
+        hamon.scale.set(0.02, 1.9, 0.04);
+        hamon.position.set(0.09, 0.95, 0);
+        hamon.rotation.z = -0.06;
+
+        const tsuba = new THREE.Mesh(GEO.cyl, goldMat);
+        tsuba.scale.set(0.28, 0.035, 0.28);
+        tsuba.position.set(0, 0.05, 0);
+
+        const hilt = new THREE.Mesh(GEO.cyl, darkMetal);
+        hilt.scale.set(0.05, 0.55, 0.05);
+        hilt.position.set(0, -0.28, 0);
+
+        kt.add(blade, hamon, tsuba, hilt);
+        kt.rotation.x = Math.PI / 2;
+        weaponHolder.add(kt);
+        break;
+      }
+
+      case 'rapier': {
+        const rp = new THREE.Group();
+        const blade = new THREE.Mesh(GEO.box, getLambert(bladeColor, emissiveColor));
+        blade.scale.set(0.04, 2.1, 0.04);
+        blade.position.set(0, 1.05, 0);
+
+        const fuller = new THREE.Mesh(GEO.box, getBasic(bladeColor, 0.95, true));
+        fuller.scale.set(0.02, 1.6, 0.045);
+        fuller.position.set(0, 1.05, 0);
+
+        const cup = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10, 0, Math.PI * 2, 0, Math.PI / 2), goldMat);
+        cup.rotation.x = Math.PI;
+        cup.position.set(0, 0.06, 0);
+
+        const knuckleBow = new THREE.Mesh(GEO.torus, goldMat);
+        knuckleBow.scale.set(0.2, 0.32, 0.03);
+        knuckleBow.position.set(0.12, -0.16, 0);
+
+        const hilt = new THREE.Mesh(GEO.cyl, darkMetal);
+        hilt.scale.set(0.045, 0.45, 0.045);
+        hilt.position.set(0, -0.22, 0);
+
+        rp.add(blade, fuller, cup, knuckleBow, hilt);
+        rp.rotation.x = Math.PI / 2;
+        weaponHolder.add(rp);
+        break;
+      }
+
+      case 'serpent_staff': {
+        const ss = new THREE.Group();
+        const rod = new THREE.Mesh(GEO.cyl, woodMat);
+        rod.scale.set(0.06, 2.1, 0.06);
+        rod.position.set(0, 0.35, 0);
+
+        for (let i = 0; i < 4; i++) {
+          const coil = new THREE.Mesh(GEO.torus, goldMat);
+          coil.scale.set(0.12, 0.12, 0.03);
+          coil.position.set(0, 0.6 + i * 0.25, 0);
+          coil.rotation.x = 0.45;
+          ss.add(coil);
+        }
+
+        const snakeL = new THREE.Mesh(GEO.cone, goldMat);
+        snakeL.scale.set(0.09, 0.32, 0.09);
+        snakeL.position.set(-0.14, 1.45, 0);
+        snakeL.rotation.z = -0.45;
+
+        const snakeR = new THREE.Mesh(GEO.cone, goldMat);
+        snakeR.scale.set(0.09, 0.32, 0.09);
+        snakeR.position.set(0.14, 1.45, 0);
+        snakeR.rotation.z = 0.45;
+
+        const orb = new THREE.Mesh(GEO.sph, getBasic(bladeColor, 0.95, true));
+        orb.scale.setScalar(0.22);
+        orb.position.set(0, 1.55, 0);
+
+        ss.add(rod, snakeL, snakeR, orb);
+        ss.position.set(0.06, -0.02, 0.08);
+        ss.rotation.x = 0.22;
+        weaponHolder.add(ss);
+        break;
+      }
+
+      case 'flail': {
+        const fl = new THREE.Group();
+        const handle = new THREE.Mesh(GEO.cyl, woodMat);
+        handle.scale.set(0.065, 1.1, 0.065);
+        handle.position.set(0, 0.2, 0);
+
+        const cap = new THREE.Mesh(GEO.cyl, darkMetal);
+        cap.scale.set(0.08, 0.18, 0.08);
+        cap.position.set(0, 0.72, 0);
+
+        for (let i = 0; i < 3; i++) {
+          const link = new THREE.Mesh(GEO.torus, darkMetal);
+          link.scale.set(0.05, 0.08, 0.02);
+          link.position.set(0, 0.88 + i * 0.12, 0);
+          link.rotation.y = (i % 2) * (Math.PI / 2);
+          fl.add(link);
+        }
+
+        const ball = new THREE.Mesh(GEO.sph, getLambert(bladeColor, emissiveColor));
+        ball.scale.setScalar(0.25);
+        ball.position.set(0, 1.4, 0);
+
+        const spike = new THREE.Mesh(GEO.cone, goldMat);
+        spike.scale.set(0.08, 0.25, 0.08);
+        spike.position.set(0, 1.65, 0);
+
+        fl.add(handle, cap, ball, spike);
+        fl.rotation.x = Math.PI / 2;
+        weaponHolder.add(fl);
+        addShield(classId === 'cleric' ? 'sun' : 'heater');
         break;
       }
 
@@ -1197,7 +1423,44 @@ export function buildHumanoid(
 
       const hType: HelmModelType = hItem.helmType || (classId === 'wizard' ? 'mage_hat' : (classId === 'rogue' ? 'assassin_hood' : 'knight_helm'));
 
-      if (hType === 'horned_helm') {
+      if (hType === 'winged_helm') {
+        const skull = new THREE.Mesh(GEO.sph, getLambert(helmColor));
+        skull.scale.set(0.58, 0.44, 0.58);
+        skull.position.set(0, 0.38, 0);
+        const wingL = new THREE.Mesh(GEO.box, goldMat);
+        wingL.scale.set(0.06, 0.48, 0.28);
+        wingL.position.set(-0.35, 0.52, -0.05);
+        wingL.rotation.z = -0.35;
+        const wingR = new THREE.Mesh(GEO.box, goldMat);
+        wingR.scale.set(0.06, 0.48, 0.28);
+        wingR.position.set(0.35, 0.52, -0.05);
+        wingR.rotation.z = 0.35;
+        gearHelmGroup.add(skull, wingL, wingR);
+      } else if (hType === 'demon_mask') {
+        const mask = new THREE.Mesh(GEO.box, getLambert(0x1a0f18));
+        mask.scale.set(0.56, 0.48, 0.52);
+        mask.position.set(0, 0.36, 0.04);
+        const hornL = new THREE.Mesh(GEO.cone, getLambert(0x551111));
+        hornL.scale.set(0.1, 0.45, 0.1);
+        hornL.position.set(-0.25, 0.65, 0.1);
+        hornL.rotation.z = 0.4;
+        const hornR = new THREE.Mesh(GEO.cone, getLambert(0x551111));
+        hornR.scale.set(0.1, 0.45, 0.1);
+        hornR.position.set(0.25, 0.65, 0.1);
+        hornR.rotation.z = -0.4;
+        const eyes = new THREE.Mesh(GEO.box, getBasic(crestColor, 0.95, true));
+        eyes.scale.set(0.32, 0.06, 0.06);
+        eyes.position.set(0, 0.35, 0.3);
+        gearHelmGroup.add(mask, hornL, hornR, eyes);
+      } else if (hType === 'circlet') {
+        const band = new THREE.Mesh(GEO.tube, goldMat);
+        band.scale.set(0.54, 0.14, 0.54);
+        band.position.set(0, 0.42, 0);
+        const jewel = new THREE.Mesh(GEO.sph, getBasic(crestColor, 0.95, true));
+        jewel.scale.setScalar(0.12);
+        jewel.position.set(0, 0.46, 0.28);
+        gearHelmGroup.add(band, jewel);
+      } else if (hType === 'horned_helm') {
         const skullcap = new THREE.Mesh(GEO.sph, getLambert(helmColor));
         skullcap.scale.set(0.58, 0.42, 0.58);
         skullcap.position.set(0, 0.38, 0);
@@ -1243,6 +1506,40 @@ export function buildHumanoid(
         eyes.scale.set(0.35, 0.05, 0.05);
         eyes.position.set(0, 0.24, 0.32);
         gearHelmGroup.add(hood, mask, eyes);
+      } else if (hType === 'crusader_visage') {
+        const helm = new THREE.Mesh(GEO.box, getLambert(helmColor));
+        helm.scale.set(0.62, 0.54, 0.6);
+        helm.position.set(0, 0.38, 0);
+
+        const crossV = new THREE.Mesh(GEO.box, goldMat);
+        crossV.scale.set(0.1, 0.56, 0.08);
+        crossV.position.set(0, 0.38, 0.32);
+
+        const crossH = new THREE.Mesh(GEO.box, goldMat);
+        crossH.scale.set(0.52, 0.1, 0.08);
+        crossH.position.set(0, 0.42, 0.32);
+
+        const slit = new THREE.Mesh(GEO.box, getBasic(crestColor, 0.95, true));
+        slit.scale.set(0.44, 0.03, 0.1);
+        slit.position.set(0, 0.42, 0.34);
+
+        gearHelmGroup.add(helm, crossV, crossH, slit);
+      } else if (hType === 'crown_of_thorns') {
+        const ring = new THREE.Mesh(GEO.torus, getLambert(0x1a151b));
+        ring.scale.set(0.56, 0.56, 0.04);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(0, 0.44, 0);
+        gearHelmGroup.add(ring);
+
+        for (let i = 0; i < 6; i++) {
+          const angle = (i * Math.PI * 2) / 6;
+          const thorn = new THREE.Mesh(GEO.cone, goldMat);
+          thorn.scale.set(0.06, 0.22, 0.06);
+          thorn.position.set(Math.cos(angle) * 0.54, 0.52, Math.sin(angle) * 0.54);
+          const ruby = new THREE.Mesh(new THREE.OctahedronGeometry(0.05, 0), getBasic(crestColor, 0.95, true));
+          ruby.position.set(Math.cos(angle) * 0.54, 0.62, Math.sin(angle) * 0.54);
+          gearHelmGroup.add(thorn, ruby);
+        }
       } else { // 'knight_helm'
         const helm = new THREE.Mesh(GEO.box, getLambert(helmColor));
         helm.scale.set(0.6, 0.48, 0.58);
@@ -1274,7 +1571,45 @@ export function buildHumanoid(
 
       const aType: ArmorModelType = aItem.armorType || (classId === 'wizard' ? 'mage_robes' : (classId === 'rogue' ? 'leather_tunic' : 'heavy_plate'));
 
-      if (aType === 'heavy_plate') {
+      if (aType === 'dragon_scale') {
+        const plate = new THREE.Mesh(GEO.box, getLambert(armorColor));
+        plate.scale.set(0.88, 0.82, 0.52);
+        plate.position.set(0, 0.48, 0);
+        const pauldronL = new THREE.Mesh(GEO.cone, goldMat);
+        pauldronL.scale.set(0.24, 0.48, 0.24);
+        pauldronL.position.set(-0.52, 0.85, 0);
+        pauldronL.rotation.z = 0.55;
+        const pauldronR = new THREE.Mesh(GEO.cone, goldMat);
+        pauldronR.scale.set(0.24, 0.48, 0.24);
+        pauldronR.position.set(0.52, 0.85, 0);
+        pauldronR.rotation.z = -0.55;
+        const crest = new THREE.Mesh(GEO.sph, getBasic(trimColor, 0.95, true));
+        crest.scale.setScalar(0.18);
+        crest.position.set(0, 0.55, 0.26);
+        gearArmorGroup.add(plate, pauldronL, pauldronR, crest);
+      } else if (aType === 'shadow_mantle') {
+        const mantle = new THREE.Mesh(GEO.box, getLambert(0x111019));
+        mantle.scale.set(0.86, 0.8, 0.48);
+        mantle.position.set(0, 0.48, 0);
+        const cowl = new THREE.Mesh(GEO.box, getLambert(0x1c1726));
+        cowl.scale.set(0.9, 0.25, 0.54);
+        cowl.position.set(0, 0.76, 0);
+        const rune = new THREE.Mesh(GEO.box, getBasic(trimColor, 0.95, true));
+        rune.scale.set(0.2, 0.2, 0.55);
+        rune.position.set(0, 0.52, 0);
+        gearArmorGroup.add(mantle, cowl, rune);
+      } else if (aType === 'celestial_vestment') {
+        const vestment = new THREE.Mesh(GEO.box, getLambert(0xf0e8ff));
+        vestment.scale.set(0.86, 0.82, 0.48);
+        vestment.position.set(0, 0.48, 0);
+        const stole = new THREE.Mesh(GEO.box, goldMat);
+        stole.scale.set(0.26, 0.86, 0.52);
+        stole.position.set(0, 0.48, 0);
+        const sun = new THREE.Mesh(GEO.sph, getBasic(trimColor, 0.95, true));
+        sun.scale.setScalar(0.16);
+        sun.position.set(0, 0.65, 0.26);
+        gearArmorGroup.add(vestment, stole, sun);
+      } else if (aType === 'heavy_plate') {
         const plate = new THREE.Mesh(GEO.box, getLambert(armorColor));
         plate.scale.set(0.88, 0.82, 0.52);
         plate.position.set(0, 0.48, 0);
@@ -1318,6 +1653,66 @@ export function buildHumanoid(
         brooch.scale.setScalar(0.14);
         brooch.position.set(0, 0.76, 0.25);
         gearArmorGroup.add(mantle, stole, brooch);
+      } else if (aType === 'gladiator_harness') {
+        const harness = new THREE.Mesh(GEO.box, getLambert(0x4a2a16));
+        harness.scale.set(0.84, 0.76, 0.48);
+        harness.position.set(0, 0.48, 0);
+
+        const strap = new THREE.Mesh(GEO.box, goldMat);
+        strap.scale.set(0.14, 0.88, 0.52);
+        strap.position.set(0, 0.48, 0);
+        strap.rotation.z = -0.45;
+
+        // Spiked left shoulder galerus
+        const galerus = new THREE.Mesh(GEO.box, goldMat);
+        galerus.scale.set(0.38, 0.42, 0.48);
+        galerus.position.set(-0.54, 0.82, 0);
+        const spike = new THREE.Mesh(GEO.cone, getLambert(0xffffff));
+        spike.scale.set(0.08, 0.32, 0.08);
+        spike.position.set(-0.62, 0.95, 0);
+
+        gearArmorGroup.add(harness, strap, galerus, spike);
+      } else if (aType === 'frost_cuirass') {
+        const cuirass = new THREE.Mesh(GEO.box, getLambert(0x1a385c));
+        cuirass.scale.set(0.88, 0.82, 0.52);
+        cuirass.position.set(0, 0.48, 0);
+
+        const iceShard1 = new THREE.Mesh(new THREE.OctahedronGeometry(0.14, 0), getBasic(0x38bdf8, 0.9, true));
+        iceShard1.position.set(-0.2, 0.58, 0.28);
+        const iceShard2 = new THREE.Mesh(new THREE.OctahedronGeometry(0.14, 0), getBasic(0x38bdf8, 0.9, true));
+        iceShard2.position.set(0.2, 0.58, 0.28);
+
+        const pL = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), getBasic(0x38bdf8, 0.85, true));
+        pL.scale.set(1.2, 1.5, 1.2);
+        pL.position.set(-0.52, 0.82, 0);
+        const pR = pL.clone();
+        pR.position.x = 0.52;
+
+        gearArmorGroup.add(cuirass, iceShard1, iceShard2, pL, pR);
+      } else if (aType === 'phoenix_mail') {
+        const mail = new THREE.Mesh(GEO.box, getLambert(0x6e1b0c));
+        mail.scale.set(0.88, 0.82, 0.52);
+        mail.position.set(0, 0.48, 0);
+
+        const wingL = new THREE.Mesh(GEO.box, goldMat);
+        wingL.scale.set(0.32, 0.65, 0.1);
+        wingL.position.set(-0.24, 0.52, 0.28);
+        wingL.rotation.z = -0.3;
+
+        const wingR = wingL.clone();
+        wingR.position.x = 0.24;
+        wingR.rotation.z = 0.3;
+
+        const pL = new THREE.Mesh(GEO.cone, goldMat);
+        pL.scale.set(0.22, 0.5, 0.22);
+        pL.position.set(-0.52, 0.82, 0);
+        pL.rotation.z = 0.55;
+
+        const pR = pL.clone();
+        pR.position.x = 0.52;
+        pR.rotation.z = -0.55;
+
+        gearArmorGroup.add(mail, wingL, wingR, pL, pR);
       } else { // 'chainmail'
         const mail = new THREE.Mesh(GEO.box, getLambert(0x555e6a));
         mail.scale.set(0.85, 0.8, 0.5);
@@ -2396,7 +2791,7 @@ export function buildEnemyModel(type: EnemyType): EnemyModelRig {
 // -------------------------------------------------------------
 // Interactive Props: Chest, Barrel, Pot, Shrine, Traps, Altar, Cage
 // -------------------------------------------------------------
-export function buildPropModel(type: DestructibleProp['type']): { root: THREE.Group } {
+export function buildPropModel(type: DestructibleProp['type'], prop?: Partial<DestructibleProp>): { root: THREE.Group } {
   const root = new THREE.Group();
   if (type === 'chest') {
     const base = new THREE.Mesh(GEO.box, getLambert(0x5a3a1c));
@@ -2480,32 +2875,87 @@ export function buildPropModel(type: DestructibleProp['type']): { root: THREE.Gr
     orb.position.set(0, 1.68, 0);
     root.add(base, pillar, orb);
   } else if (type === 'teleport_pad') {
-    // 3D Teleport Waypoint Shrine
-    const dais = new THREE.Mesh(GEO.cyl, getLambert(0x181c26, 0x0a1018));
-    dais.scale.set(1.9, 0.18, 1.9);
-    dais.position.set(0, 0.09, 0);
+    // 3D Teleport Waypoint Shrine - Imposing High-Fantasy Monument
+    // Tier 1: Outer carved stone stepped plinth with gold runic brackets
+    const tier1 = new THREE.Mesh(GEO.cyl, getLambert(0x131722, 0x090c14));
+    tier1.scale.set(2.4, 0.14, 2.4);
+    tier1.position.set(0, 0.07, 0);
 
-    const runeRing = new THREE.Mesh(GEO.torus, getBasic(0x00e5ff, 0.8, true));
-    runeRing.scale.set(1.65, 1.65, 0.04);
-    runeRing.rotation.x = Math.PI / 2;
-    runeRing.position.set(0, 0.20, 0);
+    const goldRim = new THREE.Mesh(GEO.torus, getLambert(0xd4af37, 0x4a3c10));
+    goldRim.scale.set(2.35, 2.35, 0.05);
+    goldRim.rotation.x = Math.PI / 2;
+    goldRim.position.set(0, 0.14, 0);
 
-    const beacon = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.5, 0.5, 4.0, 16, 1, true),
-      getBasic(0x00e5ff, 0.22, true)
-    );
-    beacon.position.set(0, 2.0, 0);
+    // Tier 2: Raised arcane obsidian disc
+    const tier2 = new THREE.Mesh(GEO.cyl, getLambert(0x1a2130, 0x0d131d));
+    tier2.scale.set(1.9, 0.12, 1.9);
+    tier2.position.set(0, 0.18, 0);
 
+    // Outer Glowing Arcane Rune Ring
+    const runeRingOuter = new THREE.Mesh(GEO.torus, getBasic(0x00f0ff, 0.85, true));
+    runeRingOuter.name = 'teleport_ring_outer';
+    runeRingOuter.scale.set(1.72, 1.72, 0.04);
+    runeRingOuter.rotation.x = Math.PI / 2;
+    runeRingOuter.position.set(0, 0.25, 0);
+
+    // Inner Counter-Rotating Astral Ring
+    const runeRingInner = new THREE.Mesh(GEO.torus, getBasic(0x38bdf8, 0.75, true));
+    runeRingInner.name = 'teleport_ring_inner';
+    runeRingInner.scale.set(1.15, 1.15, 0.03);
+    runeRingInner.rotation.x = Math.PI / 2;
+    runeRingInner.position.set(0, 0.26, 0);
+
+    // Central Astral Nexus Core
+    const nexusCore = new THREE.Mesh(new THREE.OctahedronGeometry(0.36, 0), getBasic(0x00ffff, 0.95, true));
+    nexusCore.name = 'teleport_nexus';
+    nexusCore.position.set(0, 0.85, 0);
+
+    // 4 Imposing Stone Obelisks with gold caps and levitating crystals
+    const obeliskGroup = new THREE.Group();
+    obeliskGroup.name = 'teleport_obelisks';
     for (let i = 0; i < 4; i++) {
-      const angle = (i * Math.PI * 2) / 4;
-      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.24, 0), getBasic(0x33ffff, 0.9, true));
-      crystal.scale.set(0.6, 1.6, 0.6);
-      crystal.position.set(Math.cos(angle) * 1.45, 0.95, Math.sin(angle) * 1.45);
+      const angle = (i * Math.PI * 2) / 4 + Math.PI / 4;
+      const px = Math.cos(angle) * 1.6;
+      const pz = Math.sin(angle) * 1.6;
+
+      // Stone Obelisk Body
+      const pylon = new THREE.Mesh(GEO.box, getLambert(0x1c2230, 0x111622));
+      pylon.scale.set(0.32, 1.25, 0.32);
+      pylon.position.set(px, 0.65, pz);
+      pylon.rotation.y = angle;
+
+      // Gold Inlay Cap
+      const cap = new THREE.Mesh(GEO.cone, getLambert(0xd4af37, 0x4a3c10));
+      cap.scale.set(0.24, 0.35, 0.24);
+      cap.position.set(px, 1.35, pz);
+
+      // Glowing Rune Strip on the Obelisk
+      const strip = new THREE.Mesh(GEO.box, getBasic(0x00f0ff, 0.9, true));
+      strip.scale.set(0.08, 0.85, 0.33);
+      strip.position.set(px, 0.65, pz);
+      strip.rotation.y = angle;
+
+      // Hovering Ethereal Crystal Prism
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), getBasic(0x67e8f9, 0.95, true));
+      crystal.scale.set(0.65, 1.6, 0.65);
+      crystal.position.set(px, 1.75, pz);
       crystal.rotation.y = angle;
-      crystal.rotation.z = 0.2;
-      root.add(crystal);
+
+      obeliskGroup.add(pylon, cap, strip, crystal);
     }
-    root.add(dais, runeRing, beacon);
+
+    // Vertical Shimmering Light Column Beacon
+    const beacon = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.65, 0.65, 5.0, 16, 1, true),
+      getBasic(0x00f0ff, 0.28, true)
+    );
+    beacon.position.set(0, 2.5, 0);
+
+    // Warm Ambient Teleport PointLight
+    const teleportLight = new THREE.PointLight(0x00f0ff, 1.8, 6.0, 2.0);
+    teleportLight.position.set(0, 1.2, 0);
+
+    root.add(tier1, goldRim, tier2, runeRingOuter, runeRingInner, nexusCore, obeliskGroup, beacon, teleportLight);
   } else if (type === 'shop_counter') {
     // 3D Merchant Stall & Merchant NPC
     const stall = new THREE.Group();
@@ -2617,14 +3067,22 @@ export function buildPropModel(type: DestructibleProp['type']): { root: THREE.Gr
     base.scale.set(1.4, 0.08, 1.4);
     base.position.set(0, 0.04, 0);
 
+    const grate = new THREE.Mesh(GEO.box, getLambert(0x1a1622));
+    grate.scale.set(1.25, 0.02, 1.25);
+    grate.position.set(0, 0.09, 0);
+    base.add(grate);
+
+    const spikesGroup = new THREE.Group();
+    spikesGroup.name = 'spikes';
     for (let x = -0.4; x <= 0.4; x += 0.4) {
       for (let z = -0.4; z <= 0.4; z += 0.4) {
         const spike = new THREE.Mesh(GEO.cone, getLambert(0xa6b0c0, 0x112233));
         spike.scale.set(0.07, 0.55, 0.07);
         spike.position.set(x, 0.32, z);
-        base.add(spike);
+        spikesGroup.add(spike);
       }
     }
+    base.add(spikesGroup);
     root.add(base);
   } else if (type === 'cage') {
     const floor = new THREE.Mesh(GEO.cyl, getLambert(0x1a1a24));
@@ -2816,6 +3274,163 @@ export function buildPropModel(type: DestructibleProp['type']): { root: THREE.Gr
     flameLight.position.set(0, 1.3, 0);
 
     root.add(grateBase, magma, flamePillar, flameLight);
+  } else if (type === 'secret_wall') {
+    // Secret Illusory / Breakable Wall with glowing runic cracks
+    const wallMat = getLambert(0x3a3848, 0x161520);
+    const crackGlowMat = getBasic(0x38bdf8, 0.75, true);
+
+    const mainBlock = new THREE.Mesh(GEO.box, wallMat);
+    mainBlock.scale.set(1.98, 2.38, 1.98);
+    mainBlock.position.set(0, 1.19, 0);
+
+    for (let i = 0; i < 4; i++) {
+      const crack = new THREE.Mesh(GEO.box, crackGlowMat);
+      crack.scale.set(0.06, 0.7 + i * 0.25, 0.06);
+      crack.position.set(-0.5 + i * 0.35, 1.0 + (i % 2) * 0.4, 1.0);
+      crack.rotation.z = (i - 1.5) * 0.22;
+      mainBlock.add(crack);
+    }
+
+    const runeSeal = new THREE.Mesh(GEO.cyl, crackGlowMat);
+    runeSeal.scale.set(0.35, 0.04, 0.35);
+    runeSeal.rotation.x = Math.PI / 2;
+    runeSeal.position.set(0, 1.25, 1.01);
+    mainBlock.add(runeSeal);
+
+    const rubbleMat = getLambert(0x282634);
+    for (let r = 0; r < 5; r++) {
+      const stone = new THREE.Mesh(GEO.box, rubbleMat);
+      stone.scale.set(0.25, 0.18, 0.22);
+      stone.position.set(-0.6 + r * 0.3, 0.09, 0.95);
+      stone.rotation.y = r * 0.7;
+      root.add(stone);
+    }
+    root.add(mainBlock);
+  } else if (type === 'rune_puzzle') {
+    // 3D Elemental Rune Floor Pedestal (Fire, Frost, Arcane)
+    const runeType = prop?.runeType || 'fire';
+
+    let baseColor = 0x1f1111;
+    let rimColor = 0x5a2312;
+    let mainColor = 0xff3b00;
+    let emissiveGlow = 0xff5500;
+    let lightColor = 0xff4400;
+
+    if (runeType === 'frost') {
+      baseColor = 0x0c1b28;
+      rimColor = 0x1e3a5f;
+      mainColor = 0x00f0ff;
+      emissiveGlow = 0x38bdf8;
+      lightColor = 0x00e5ff;
+    } else if (runeType === 'arcane') {
+      baseColor = 0x1a0f26;
+      rimColor = 0x4c1d95;
+      mainColor = 0xc084fc;
+      emissiveGlow = 0xa855f7;
+      lightColor = 0xc084fc;
+    }
+
+    // Carved Runic Pedestal with stepped rim
+    const dial = new THREE.Mesh(GEO.cyl, getLambert(baseColor, baseColor - 0x050505));
+    dial.scale.set(1.2, 0.16, 1.2);
+    dial.position.set(0, 0.08, 0);
+
+    const ring = new THREE.Mesh(GEO.torus, getLambert(rimColor));
+    ring.scale.set(1.05, 1.05, 0.05);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(0, 0.17, 0);
+
+    // Elemental Unique Glyph Geometry
+    let runeGlyph: THREE.Mesh;
+    if (runeType === 'fire') {
+      // Blazing spire flame geometry
+      runeGlyph = new THREE.Mesh(GEO.cone, getBasic(mainColor, 0.95, true));
+      runeGlyph.scale.set(0.38, 0.75, 0.38);
+    } else if (runeType === 'frost') {
+      // Faceted ice shard diamond
+      runeGlyph = new THREE.Mesh(new THREE.OctahedronGeometry(0.36, 0), getBasic(mainColor, 0.95, true));
+      runeGlyph.scale.set(0.55, 1.3, 0.55);
+    } else {
+      // Arcane star octahedron
+      runeGlyph = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), getBasic(mainColor, 0.95, true));
+      runeGlyph.scale.set(0.7, 0.7, 0.7);
+    }
+    runeGlyph.name = 'rune_glyph';
+    runeGlyph.position.set(0, 0.52, 0);
+
+    // Orbiting Elemental Motes
+    const orbitGroup = new THREE.Group();
+    orbitGroup.name = 'rune_orbits';
+    const numOrbits = runeType === 'frost' ? 4 : 3;
+    for (let o = 0; o < numOrbits; o++) {
+      const oAngle = (o * Math.PI * 2) / numOrbits;
+      const shardGeo = runeType === 'fire' ? GEO.sph : (runeType === 'frost' ? GEO.cone : GEO.box);
+      const shard = new THREE.Mesh(shardGeo, getBasic(emissiveGlow, 0.9, true));
+      shard.scale.setScalar(0.09);
+      shard.position.set(Math.cos(oAngle) * 0.48, 0.52, Math.sin(oAngle) * 0.48);
+      orbitGroup.add(shard);
+    }
+
+    // Glowing Concentric Rune Halo
+    const runeGlow = new THREE.Mesh(GEO.torus, getBasic(mainColor, 0.85, true));
+    runeGlow.name = 'rune_glow';
+    runeGlow.scale.set(0.85, 0.85, 0.04);
+    runeGlow.rotation.x = Math.PI / 2;
+    runeGlow.position.set(0, 0.18, 0);
+    runeGlow.visible = false;
+
+    // Point Light with matching elemental hue
+    const runeLight = new THREE.PointLight(lightColor, 0.4, 5.5, 2.0);
+    runeLight.name = 'rune_light';
+    runeLight.position.set(0, 0.65, 0);
+
+    root.add(dial, ring, runeGlyph, orbitGroup, runeGlow, runeLight);
+  } else if (type === 'sealed_chest') {
+    // Ancient Sealed Legendary Runic Chest
+    const goldMat = getLambert(0xd4af37, 0x4a3c10);
+    const ironMat = getLambert(0x2d313d, 0x12141a);
+
+    const base = new THREE.Mesh(GEO.box, goldMat);
+    base.scale.set(0.95, 0.65, 0.7);
+    base.position.set(0, 0.33, 0);
+
+    const lid = new THREE.Mesh(GEO.box, goldMat);
+    lid.scale.set(1.0, 0.24, 0.74);
+    lid.position.set(0, 0.77, 0);
+
+    const bandL = new THREE.Mesh(GEO.box, ironMat);
+    bandL.scale.set(0.12, 0.78, 0.76);
+    bandL.position.set(-0.3, 0.45, 0);
+    const bandR = bandL.clone();
+    bandR.position.x = 0.3;
+
+    const lock = new THREE.Mesh(GEO.sph, getBasic(0x00f0ff, 0.95, true));
+    lock.scale.set(0.12, 0.16, 0.08);
+    lock.position.set(0, 0.6, 0.37);
+
+    const barrierGroup = new THREE.Group();
+    barrierGroup.name = 'chest_barrier';
+
+    const barrierSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(0.85, 16, 12),
+      getBasic(0xa855f7, 0.28, true)
+    );
+    barrierSphere.position.set(0, 0.55, 0);
+    barrierGroup.add(barrierSphere);
+
+    for (let i = 0; i < 3; i++) {
+      const angle = (i * Math.PI * 2) / 3;
+      const seal = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), getBasic(0xec4899, 0.9, true));
+      seal.position.set(Math.cos(angle) * 0.95, 0.65, Math.sin(angle) * 0.95);
+      barrierGroup.add(seal);
+    }
+
+    const barrierLight = new THREE.PointLight(0xa855f7, 1.8, 6.5, 2.0);
+    barrierLight.name = 'barrier_light';
+    barrierLight.position.set(0, 0.8, 0);
+    barrierGroup.add(barrierLight);
+
+    root.add(base, lid, bandL, bandR, lock, barrierGroup);
   }
   return { root };
 }

@@ -127,7 +127,8 @@ export class ParticleEngine {
     color = '#ffffff',
     isCrit = false,
     tier: 'small' | 'normal' | 'large' | 'epic' = 'normal',
-    duration?: number
+    duration?: number,
+    textType?: 'damage' | 'loot' | 'status'
   ): void {
     if (!this.textContainer) return;
 
@@ -137,10 +138,44 @@ export class ParticleEngine {
       return Number.isFinite(num) ? String(Math.round(num * 10) / 10) : match;
     });
 
+    // Auto-detect text category if not explicitly provided
+    let category = textType;
+    if (!category) {
+      if (
+        sanitizedText.startsWith('+') ||
+        sanitizedText.includes('Oro') ||
+        sanitizedText.includes('EXP') ||
+        sanitizedText.includes('Pozione') ||
+        sanitizedText.includes('Equip:') ||
+        sanitizedText.includes('Essenza')
+      ) {
+        category = 'loot';
+      } else if (
+        sanitizedText.startsWith('-') ||
+        /^[\d\s]+/.test(sanitizedText) ||
+        sanitizedText.includes('🔥') ||
+        sanitizedText.includes('☠️') ||
+        sanitizedText.includes('☀️') ||
+        sanitizedText.includes('⚡') ||
+        sanitizedText.includes('SCUDO') ||
+        sanitizedText.includes('DANNO')
+      ) {
+        category = 'damage';
+      } else {
+        category = 'status';
+      }
+    }
+
+    // Default white damage looks bland: enhance standard physical hits with energetic warm ember hue
+    let finalColor = color;
+    if (category === 'damage' && (color === '#ffffff' || color === '#fff') && !isCrit) {
+      finalColor = '#ffb049';
+    }
+
     const el = document.createElement('div');
-    el.className = `combat-text ${tier} ${isCrit ? 'crit' : ''}`;
+    el.className = `combat-text ${category}-text ${tier} ${isCrit ? 'crit' : ''}`;
     el.textContent = sanitizedText;
-    el.style.color = color;
+    el.style.color = finalColor;
     this.textContainer.appendChild(el);
 
     let defaultLife = 0.85;

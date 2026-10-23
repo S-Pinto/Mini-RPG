@@ -1,7 +1,7 @@
 // D&D 5e Classic Equipment, Rarities and Procedural Generation
 // The Albedo Renegades: Shadow of Elanthria
 
-import type { Item, ItemRarity, ItemSlot, CharacterStats, ClassId, WeaponModelType, HelmModelType, ArmorModelType, WeaponStyle } from '../types/game.ts';
+import type { Item, ItemRarity, ItemSlot, CharacterStats, ClassId, WeaponModelType, HelmModelType, ArmorModelType, RingModelType, RelicModelType, WeaponStyle } from '../types/game.ts';
 
 export const RARITIES: Record<ItemRarity, { name: string; color: string; hex: number; affixCount: number; mult: number }> = {
   common: { name: 'Comune', color: '#b0a8c0', hex: 0xb0a8c0, affixCount: 0, mult: 1.0 },
@@ -39,28 +39,41 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
       'Bacchetta di Cristallo & Tomo Antico',
       'Verga del Fuoco Arcano',
       'Scettro della Trama di Ealscylf',
-      'Bastone delle Tempeste Astrali'
+      'Bastone delle Tempeste Astrali',
+      'Falce Spettrale dell’Oltretomba',
+      'Scettro della Luce Arcana',
+      'Scettro dei Serpenti dell’Oltretomba',
+      'Lama Prismatica di Cristallo'
     ],
     armor: [
       'Veste della Trama di Ealscylf',
       'Tonaca della Meditazione Arcana',
-      'Mantello del Mago Guerriero',
-      'Robe Tessute di Stelle'
+      'Mantello delle Ombre di Vazark',
+      'Robe Tessute di Stelle',
+      'Paramenti Celestiali della Grazia',
+      'Pettorale della Calotta Glaciale',
+      'Veste della Fenice Ardente'
     ],
     helm: [
       'Cappello a Punta dell’Arcano',
-      'Diadema Arcano di Cristallo',
-      'Corona della Mente Chiara'
+      'Diadema Astrale di Ealscylf',
+      'Cerchietto di Zaffiro Arcano',
+      'Corona della Mente Chiara',
+      'Corona di Spine dell’Abisso'
     ],
     ring: [
-      'Anello del Maestro d’Incanti',
-      'Sigillo della Concentrazione',
-      'Anello di Rubino Astrale'
+      'Anello Sigillo di Rubino Ardente',
+      'Fascia di Zaffiro Astrale',
+      'Spirale di Smeraldo dei Boschi',
+      'Sigillo della Concentrazione Arcana',
+      'Sigillo del Vuoto Cosmico'
     ],
     relic: [
-      'Grimorio delle Fiamme Antiche',
+      'Antico Grimorio delle Ombre',
+      'Clessidra Celestiale del Tempo',
       'Pietra di Ioun dell’Intelletto',
-      'Tomo Proibito di Ealscylf'
+      'Frammento Cuore di Drago di Vazark',
+      'Frammento di Cometa Caduta'
     ]
   },
   fighter: {
@@ -68,52 +81,86 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
       'Grande Ascia da Battaglia di Azren',
       'Bipenne Gigante del Berserker',
       'Spadone a Due Mani dei Renegades',
+      'Spadone di Cristallo dei Titani',
+      'Katana d’Acciaio Nero di Ealscylf',
+      'Alabarda da Guerra di Okkarn',
+      'Falce Pesante dei Mietitori',
       'Doppie Spade di Acciaio Valiriano',
+      'Flagello Pesante Chiodato',
       'Maglio Frantuma-Ossa',
-      'Ascia da Guerra Pesante'
+      'Balestra da Guerra di Azren'
     ],
     armor: [
       'Corazza a Piastre del Cavaliere',
-      'Armatura di Piastre Pesanti',
+      'Corazza in Scaglie di Drago Dorato',
+      'Armatura di Piastre Pesanti di Azren',
+      'Finimento del Gladiatore dell’Arena',
+      'Corazza di Gelo Eterno',
       'Cotta di Maglia Rinforzata'
     ],
     helm: [
       'Grande Elmo di Ferro',
+      'Elmo Alato delle Valchirie',
       'Elmo Cornuto del Guerriero',
-      'Maschera della Milizia di Azren'
+      'Visiera di Ferro del Crociato',
+      'Corona di Spine Sanguigne',
+      'Maschera Cornuta del Demone',
+      'Celata Alata di Okkarn'
     ],
     ring: [
-      'Fascia del Berserker',
-      'Anello del Colpo Devastante'
+      'Anello del Teschio della Notte',
+      'Anello Occhio di Drago di Vazark',
+      'Anello Sigillo di Rubino Ardente',
+      'Fascia del Berserker di Azren',
+      'Spirale di Smeraldo Frantumante'
     ],
     relic: [
+      'Cuore di Drago di Vazark',
+      'Piuma della Fenice Rinata',
       'Stendardo di Guerra della Milizia',
-      'Cuore di Ferro di Azren'
+      'Clessidra Celestiale da Battaglia',
+      'Santo Graal dei Guerrieri Caduti'
     ]
   },
   paladin: {
     weapon: [
       'Spada Lunga Benedetta',
       'Spadone Sacro del Giudizio',
+      'Spadone di Cristallo della Redenzione',
+      'Stocco Benedetto da Duellante',
+      'Flagello Divino dell’Alba',
+      'Alabarda della Luce Consacrata',
       'Martello Radioso dell’Alba',
       'Ascia Sacra della Giustizia',
       'Spada Radiosa dei Renegades'
     ],
     armor: [
       'Armatura a Piastre Consacrata',
-      'Corazza dell’Alba Radiosa',
+      'Cotta della Fenice Consacrata',
+      'Corazza in Scaglie di Drago Dorato',
+      'Pettorale della Calotta Glaciale',
+      'Paramenti Celestiali della Grazia',
       'Pettorale della Giustizia Divina'
     ],
     helm: [
+      'Maschera del Crociato dei Giusti',
+      'Elmo Alato delle Valchirie',
       'Elmo del Guardiano Divino',
       'Celata d’Oro dei Renegades',
       'Corona della Luce Divina'
     ],
     ring: [
       'Sigillo della Grazia Divina',
+      'Sigillo dello Sguardo Draconico',
+      'Anello Sigillo di Rubino Ardente',
+      'Fascia di Zaffiro Astrale',
       'Anello della Luce Incorruttibile'
     ],
     relic: [
+      'Santo Graal dell’Alba Radiosa',
+      'Piuma della Fenice Rinata',
+      'Scheggia Astrale di Cometa',
+      'Croce Ansata della Luce Eterna',
       'Icona Sacra dell’Alba',
       'Reliquiario della Fede Incrollabile'
     ]
@@ -122,49 +169,83 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
     weapon: [
       'Doppi Pugnali di Mithral',
       'Daghe Avvelenate della Notte',
+      'Katana dell’Ombra Fulminea',
+      'Stocco da Duellante dei Renegades',
+      'Striscia di Mithral Trafiggente',
+      'Falce delle Ombre Furtive',
       'Arco Composito del Predatore',
-      'Arco Lungo da Caccia',
+      'Balestra a Ripetizione di Azren',
+      'Balestra Pesante da Assedio',
       'Stiletti Gemelli dell’Ombra'
     ],
     armor: [
       'Giustacuore di Cuoio Borchiato',
-      'Garb delle Ombre di Azren',
+      'Finimento del Gladiatore dell’Ombra',
+      'Cotta della Fenice Nera',
+      'Mantello delle Ombre di Azren',
+      'Corazza in Scaglie di Drago Scuro',
       'Veste del Predatore Furtivo'
     ],
     helm: [
       'Cappuccio dell’Assassino',
-      'Maschera delle Tenebre'
+      'Corona di Spine dell’Assassino',
+      'Maschera del Teschio della Notte',
+      'Maschera Cornuta del Demone',
+      'Cerchietto d’Ombra di Vazark'
     ],
     ring: [
+      'Anello del Teschio della Notte',
+      'Anello Occhio di Drago di Vazark',
+      'Sigillo del Vuoto Cosmico',
+      'Spirale di Smeraldo dei Boschi',
       'Anello del Passo Silenzioso',
       'Fascia del Ladro Letale'
     ],
     relic: [
-      'Fiala del Veleno Antico',
-      'Moneta Fortunata dei Renegades'
+      'Clessidra Celestiale del Tempo',
+      'Piuma della Fenice Rinata',
+      'Cuore di Drago di Vazark',
+      'Fiala del Veleno Primordiale',
+      'Antico Grimorio dei Segreti'
     ]
   },
   cleric: {
     weapon: [
       'Mazza Ferrata del Tempio',
-      'Grande Bastone delle Tempeste',
+      'Mazzafrusto Sacro della Giustizia',
+      'Bastone dei Due Serpenti Smeraldini',
+      'Grande Bastone delle Tempeste Sacre',
+      'Alabarda Benedetta dell’Aurora',
       'Maglio Sacro dei Giusti',
       'Flagello Divino dell’Alba'
     ],
     armor: [
+      'Paramenti Celestiali della Grazia',
+      'Corazza di Gelo Eterno della Cattedrale',
+      'Cotta della Fenice Sacra',
       'Vestimento Consacrato della Trama',
-      'Pettorale della Redenzione',
+      'Corazza in Scaglie di Drago Dorato',
       'Cotta Benedetta della Fede'
     ],
     helm: [
+      'Visiera del Crociato dell’Alba',
+      'Diadema Astrale di Ealscylf',
+      'Elmo Alato delle Valchirie',
       'Corona del Sacerdote di Guerra',
-      'Diadema della Grazia Spirituale'
+      'Cerchietto della Grazia Spirituale'
     ],
     ring: [
+      'Spirale di Smeraldo dei Boschi',
+      'Sigillo del Vuoto Cosmico',
+      'Fascia di Zaffiro Astrale',
       'Anello della Preghiera Eterna',
       'Sigillo della Vita Rinnovata'
     ],
     relic: [
+      'Santo Graal dell’Alba Radiosa',
+      'Frammento di Cometa Caduta',
+      'Piuma della Fenice Rinata',
+      'Croce Ansata della Luce Eterna',
       'Icona Sacra di Ealscylf',
       'Calice Benedetto delle Anime Salve'
     ]
@@ -303,11 +384,45 @@ export function generateItem(slot: ItemSlot, ilvl: number, rarity: ItemRarity, c
   let modelType: WeaponModelType | undefined;
   let helmType: HelmModelType | undefined;
   let armorType: ArmorModelType | undefined;
+  let ringType: RingModelType | undefined;
+  let relicType: RelicModelType | undefined;
   let weaponStyle: WeaponStyle | undefined;
 
   let icon = '📦';
   if (slot === 'weapon') {
-    if (finalName.includes('Bipenne') || finalName.includes('Grande Ascia')) {
+    if (finalName.includes('Katana')) {
+      modelType = 'katana';
+      weaponStyle = 'dual_swords';
+      icon = '🗡️';
+    } else if (finalName.includes('Stocco') || finalName.includes('Striscia')) {
+      modelType = 'rapier';
+      weaponStyle = 'sword_shield';
+      icon = '🤺';
+    } else if (finalName.includes('Cristallo') || finalName.includes('Prismatica')) {
+      modelType = 'crystal_greatsword';
+      weaponStyle = 'greatsword_2h';
+      icon = '💎';
+    } else if (finalName.includes('Serpenti')) {
+      modelType = 'serpent_staff';
+      weaponStyle = 'staff_2h';
+      icon = '🐍';
+    } else if (finalName.includes('Flagello') || finalName.includes('Mazzafrusto')) {
+      modelType = 'flail';
+      weaponStyle = 'mace_shield';
+      icon = '⛓️';
+    } else if (finalName.includes('Falce')) {
+      modelType = 'scythe';
+      weaponStyle = 'greatsword_2h';
+      icon = '🌾';
+    } else if (finalName.includes('Alabarda') || finalName.includes('Lancia') || finalName.includes('Falcione')) {
+      modelType = 'halberd';
+      weaponStyle = 'greatsword_2h';
+      icon = '🔱';
+    } else if (finalName.includes('Balestra')) {
+      modelType = 'crossbow';
+      weaponStyle = 'bow';
+      icon = '🏹';
+    } else if (finalName.includes('Bipenne') || finalName.includes('Grande Ascia')) {
       modelType = 'greataxe';
       weaponStyle = 'greatsword_2h';
       icon = '🪓';
@@ -347,7 +462,7 @@ export function generateItem(slot: ItemSlot, ilvl: number, rarity: ItemRarity, c
       modelType = 'hammer';
       weaponStyle = 'greatsword_2h';
       icon = '🔨';
-    } else if (finalName.includes('Mazza') || finalName.includes('Flagello')) {
+    } else if (finalName.includes('Mazza')) {
       modelType = 'mace';
       weaponStyle = 'mace_shield';
       icon = '🔨';
@@ -357,7 +472,22 @@ export function generateItem(slot: ItemSlot, ilvl: number, rarity: ItemRarity, c
       icon = '⚔️';
     }
   } else if (slot === 'helm') {
-    if (finalName.includes('Cappello') || finalName.includes('Diadema')) {
+    if (finalName.includes('Crociato') || finalName.includes('Visiera')) {
+      helmType = 'crusader_visage';
+      icon = '⛑️';
+    } else if (finalName.includes('Spine')) {
+      helmType = 'crown_of_thorns';
+      icon = '🥀';
+    } else if (finalName.includes('Alato') || finalName.includes('Valchirie')) {
+      helmType = 'winged_helm';
+      icon = '🪽';
+    } else if (finalName.includes('Demone') || finalName.includes('Teschio')) {
+      helmType = 'demon_mask';
+      icon = '👹';
+    } else if (finalName.includes('Diadema') || finalName.includes('Cerchietto')) {
+      helmType = 'circlet';
+      icon = '✨';
+    } else if (finalName.includes('Cappello')) {
       helmType = 'mage_hat';
       icon = '🧙';
     } else if (finalName.includes('Cappuccio') || finalName.includes('Maschera')) {
@@ -374,7 +504,25 @@ export function generateItem(slot: ItemSlot, ilvl: number, rarity: ItemRarity, c
       icon = '🪖';
     }
   } else if (slot === 'armor') {
-    if (finalName.includes('Veste') || finalName.includes('Tonaca') || finalName.includes('Robe')) {
+    if (finalName.includes('Gladiatore') || finalName.includes('Finimento')) {
+      armorType = 'gladiator_harness';
+      icon = '🥋';
+    } else if (finalName.includes('Gelo') || finalName.includes('Glaciale')) {
+      armorType = 'frost_cuirass';
+      icon = '🧊';
+    } else if (finalName.includes('Fenice')) {
+      armorType = 'phoenix_mail';
+      icon = '🔥';
+    } else if (finalName.includes('Scaglie') || finalName.includes('Drago') || finalName.includes('Khloron')) {
+      armorType = 'dragon_scale';
+      icon = '🐉';
+    } else if (finalName.includes('Mantello') || finalName.includes('Ombre')) {
+      armorType = 'shadow_mantle';
+      icon = '🌑';
+    } else if (finalName.includes('Paramenti') || finalName.includes('Celestiali')) {
+      armorType = 'celestial_vestment';
+      icon = '✨';
+    } else if (finalName.includes('Veste') || finalName.includes('Tonaca') || finalName.includes('Robe')) {
       armorType = 'mage_robes';
       icon = '🥋';
     } else if (finalName.includes('Cuoio') || finalName.includes('Garb')) {
@@ -388,9 +536,54 @@ export function generateItem(slot: ItemSlot, ilvl: number, rarity: ItemRarity, c
       icon = '🛡️';
     }
   } else if (slot === 'ring') {
-    icon = '💍';
+    if (finalName.includes('Occhio di Drago') || finalName.includes('Sguardo Draconico')) {
+      ringType = 'dragon_eye_ring';
+      icon = '👁️';
+    } else if (finalName.includes('Vuoto')) {
+      ringType = 'void_seal';
+      icon = '🪐';
+    } else if (finalName.includes('Rubino') || finalName.includes('Ardente') || finalName.includes('Sangue')) {
+      ringType = 'ruby_signet';
+      icon = '🔴';
+    } else if (finalName.includes('Zaffiro') || finalName.includes('Astrale') || finalName.includes('Mente')) {
+      ringType = 'sapphire_band';
+      icon = '🔷';
+    } else if (finalName.includes('Smeraldo') || finalName.includes('Giada') || finalName.includes('Boschi')) {
+      ringType = 'emerald_coil';
+      icon = '🟢';
+    } else if (finalName.includes('Teschio') || finalName.includes('Notte')) {
+      ringType = 'skull_ring';
+      icon = '💀';
+    } else {
+      ringType = 'ruby_signet';
+      icon = '💍';
+    }
   } else if (slot === 'relic') {
-    icon = '📜';
+    if (finalName.includes('Piuma')) {
+      relicType = 'phoenix_feather';
+      icon = '🪶';
+    } else if (finalName.includes('Cometa') || finalName.includes('Scheggia Astrale')) {
+      relicType = 'comet_shard';
+      icon = '☄️';
+    } else if (finalName.includes('Graal') || finalName.includes('Calice')) {
+      relicType = 'holy_grail';
+      icon = '🏆';
+    } else if (finalName.includes('Grimorio') || finalName.includes('Tomo')) {
+      relicType = 'ancient_grimoire';
+      icon = '📖';
+    } else if (finalName.includes('Clessidra') || finalName.includes('Tempo')) {
+      relicType = 'celestial_hourglass';
+      icon = '⏳';
+    } else if (finalName.includes('Drago') || finalName.includes('Pietra di Ioun')) {
+      relicType = 'dragon_heart_stone';
+      icon = '🔮';
+    } else if (finalName.includes('Croce') || finalName.includes('Ankh') || finalName.includes('Icona')) {
+      relicType = 'sacred_ankh';
+      icon = '⚱️';
+    } else {
+      relicType = 'holy_grail';
+      icon = '📜';
+    }
   }
 
   const goldValue = Math.round((12 + ilvl * 8) * rar.mult);
@@ -408,7 +601,9 @@ export function generateItem(slot: ItemSlot, ilvl: number, rarity: ItemRarity, c
     modelType,
     weaponStyle,
     helmType,
-    armorType
+    armorType,
+    ringType,
+    relicType
   };
 }
 

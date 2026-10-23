@@ -241,6 +241,16 @@ function gameLoop(now: number): void {
     }
   }
 
+  if (input.isMapRequested) {
+    input.isMapRequested = false;
+    if (gameState.state === 'map') {
+      modals.close();
+      gameState.state = 'play';
+    } else if (gameState.state === 'play') {
+      gameState.openFastTravelMap();
+    }
+  }
+
   if (gameState.state === 'play' && gameState.currentRoom) {
     // 1. Process player inputs
     input.update(gameState.player, gameState.enemies);
@@ -257,10 +267,6 @@ function gameLoop(now: number): void {
         gameState.state = 'levelup';
         modals.showLevelUp(gameState.player);
       }
-    }
-    if (input.isMapRequested) {
-      input.isMapRequested = false;
-      gameState.openFastTravelMap();
     }
     if (input.isCodexRequested) {
       input.isCodexRequested = false;

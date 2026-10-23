@@ -258,6 +258,9 @@ export class Enemy {
   public maxShieldHp = 0;
   public isEnraged = false;
   public toxicAuraTimer = 0;
+  public bossPhase: 1 | 2 | 3 = 1;
+  public isGildedKobold = false;
+  public onPhaseChange?: (newPhase: 2 | 3) => void;
 
   public mesh: THREE.Group;
   private modelUpdate: (t: number, speed: number, attackProgress?: number) => void;
@@ -504,8 +507,31 @@ export class Enemy {
 
     this.hp -= finalDmg;
 
+    // Multi-phase Boss Transitions for Khloron Goldenhorn
+    if (this.type === 'boss_dragon_vermithrax') {
+      if (this.bossPhase === 1 && this.hp > 0 && this.hp <= this.maxHp * 0.60) {
+        this.bossPhase = 2;
+        this.stats.speed *= 1.25;
+        this.stats.attackCooldown *= 0.85;
+        sound.dragonRoar();
+        particles.spawnShockwave(this.x, this.y, 8.0, 0x10b981, 0.6);
+        particles.spawnBurst(this.x, 2.0, this.y, 45, 0x10b981, 9);
+        particles.spawnFloatingText(this.x, 3.2, this.y, '⚡ FASE 2: L\'IRA SMERALDINA! ⚡', '#10b981', true);
+        if (this.onPhaseChange) this.onPhaseChange(2);
+      } else if (this.bossPhase === 2 && this.hp > 0 && this.hp <= this.maxHp * 0.25) {
+        this.bossPhase = 3;
+        this.stats.speed *= 1.35;
+        this.stats.attackCooldown *= 0.65;
+        sound.dragonRoar();
+        particles.spawnShockwave(this.x, this.y, 10.0, 0xffd700, 0.8);
+        particles.spawnBurst(this.x, 2.5, this.y, 65, 0xffd700, 12);
+        particles.spawnFloatingText(this.x, 3.4, this.y, '🔥 FASE 3: APOTEOSI D\'ORO! 🔥', '#ffd700', true);
+        if (this.onPhaseChange) this.onPhaseChange(3);
+      }
+    }
+
     // Enrage mechanic: below 45% HP for bosses, berserkers, or dire beasts
-    const canEnrage = this.stats.isBoss || this.type === 'orc_berserker' || this.type === 'dire_beast';
+    const canEnrage = (this.stats.isBoss && this.type !== 'boss_dragon_vermithrax') || this.type === 'orc_berserker' || this.type === 'dire_beast';
     if (canEnrage && !this.isEnraged && this.hp > 0 && this.hp <= this.maxHp * 0.45) {
       this.isEnraged = true;
       this.stats.speed *= 1.35;

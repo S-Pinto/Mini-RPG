@@ -243,10 +243,24 @@ export class HudManager {
     const boss = enemies.find(e => e.stats.isBoss && !e.isDead);
     if (boss && this.bossBar) {
       this.bossBar.style.display = 'block';
-      if (this.bossNameText) this.bossNameText.textContent = boss.stats.name;
+      let title = boss.stats.name;
+      if (boss.bossPhase && boss.bossPhase > 1) {
+        title += boss.bossPhase === 2 ? ' — [Fase 2: Ira Smeraldina]' : ' — [Fase 3: Apoteosi d\'Oro]';
+      }
+      if (this.bossNameText) this.bossNameText.textContent = title;
       const bossHpPct = Math.max(0, Math.min(100, (boss.hp / boss.maxHp) * 100));
       if (this.bossFill) {
         this.bossFill.style.width = `${bossHpPct}%`;
+        if (boss.bossPhase === 3) {
+          this.bossFill.style.background = 'linear-gradient(90deg, #b45309, #f59e0b, #fef08a)';
+          this.bossFill.style.boxShadow = '0 0 16px rgba(255, 215, 0, 0.85)';
+        } else if (boss.bossPhase === 2) {
+          this.bossFill.style.background = 'linear-gradient(90deg, #047857, #10b981, #6ee7b7)';
+          this.bossFill.style.boxShadow = '0 0 14px rgba(16, 185, 129, 0.8)';
+        } else {
+          this.bossFill.style.background = '';
+          this.bossFill.style.boxShadow = '';
+        }
       }
       if (this.bossHpPctText) {
         this.bossHpPctText.textContent = `${Math.ceil(bossHpPct)}%`;

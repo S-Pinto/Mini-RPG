@@ -58,6 +58,7 @@ export class CombatSystem {
   public hitStopTimer = 0;
   public shakeTrauma = 0;
   public onPropDropItem?: (propType: 'sarcophagus' | 'weapon_rack', x: number, y: number) => void;
+  public onSecretWallDestroyed?: (pr: DestructibleProp) => void;
 
   public addScreenShake(amount: number): void {
     this.shakeTrauma = Math.min(1.0, this.shakeTrauma + amount);
@@ -141,6 +142,16 @@ export class CombatSystem {
       sound.coin();
       if (this.onPropDropItem) {
         this.onPropDropItem('weapon_rack', pr.x, pr.y);
+      }
+    } else if (pr.type === 'secret_wall') {
+      sound.heavyChop();
+      this.addScreenShake(0.5);
+      particles.spawnShockwave(pr.x, pr.y, 4.2, 0x94a3b8, 0.4);
+      particles.spawnBurst(pr.x, 1.2, pr.y, 35, 0x64748b, 8);
+      particles.spawnFloatingText(pr.x, 2.4, pr.y, '🗝️ PARETE SEGRETA INFRANTA! +45 EXP', '#38bdf8', true);
+      player.addXp(45);
+      if (this.onSecretWallDestroyed) {
+        this.onSecretWallDestroyed(pr);
       }
     } else if (pr.type === 'campfire') {
       sound.breakProp();
@@ -1247,65 +1258,176 @@ export class CombatSystem {
       return;
     }
 
-    // Boss 4: Khloron Goldenhorn, Terrore di Elanthria (4 Distinct Attack Patterns)
+    // Boss 4: Khloron Goldenhorn, Terrore di Elanthria (Epic 3-Phase Legendary Encounter)
     if (e.type === 'boss_dragon_vermithrax') {
-      const pattern = e.attackCount % 4;
+      const phase = e.bossPhase || 1;
 
-      if (pattern === 0) {
-        // Pattern A: Legendary Dragon Flame Breath (Wide fan of 9 fireballs)
-        sound.dragonRoar();
-        const numFireballs = 9;
-        const spread = Math.PI * 0.55;
-        const baseAngle = Math.atan2(dirX, dirY);
+      if (phase === 1) {
+        // === FASE 1: DRAGO GUERRIERO ARMATO (100% - 60% HP) ===
+        const pattern = e.attackCount % 4;
 
-        for (let i = 0; i < numFireballs; i++) {
-          const a = baseAngle + (i - (numFireballs - 1) / 2) * (spread / (numFireballs - 1));
-          const vx = Math.sin(a) * 15;
-          const vy = Math.cos(a) * 15;
-          this.spawnProjectile(e.x, e.y, vx, vy, 0.42, e.stats.damage, false, 0xff3300, 0, 'burn');
-        }
-      } else if (pattern === 1) {
-        // Pattern B: Meteor Rain (3 simultaneous impact telegraph zones)
-        sound.fireball();
-        const meteorOffsets = [
-          { ox: 0, oy: 0 },
-          { ox: -3.5, oy: 2.0 },
-          { ox: 3.5, oy: -2.0 }
-        ];
-
-        meteorOffsets.forEach((off) => {
-          const mx = targetX + off.ox;
-          const my = targetY + off.oy;
-          telegraphs.createCircle(mx, my, 2.8, 0.85, 0xff3300, () => {
-            sound.fireball();
-            particles.spawnShockwave(mx, my, 3.2, 0xff4400, 0.35);
-            particles.spawnBurst(mx, 1.5, my, 25, 0xff5500, 8);
-            if (Math.hypot(player.x - mx, player.y - my) <= 2.8) {
-              dealEnemyDmg(Math.round(e.stats.damage * 1.5), 'METEORA!', true);
+        if (pattern === 0) {
+          // Pattern A: Colpo di Coda ad Area (180° sweep with golden shockwave)
+          sound.heavyChop();
+          telegraphs.createCircle(e.x - dirX * 1.5, e.y - dirY * 1.5, 4.2, 0.65, 0xffd700, () => {
+            sound.dragonRoar();
+            particles.spawnShockwave(e.x, e.y, 4.5, 0xffd700, 0.35);
+            particles.spawnBurst(e.x, 1.2, e.y, 25, 0xd4af37, 7);
+            if (dist <= 4.2) {
+              player.knockbackX = -dirX * 16;
+              player.knockbackY = -dirY * 16;
+              dealEnemyDmg(Math.round(e.stats.damage * 1.2), 'SPAZZATA DI CODA!', true);
             }
           });
-        });
-      } else if (pattern === 2) {
-        // Pattern C: Inferno Cataclysm (Devastating 7.5m AoE blast)
-        telegraphs.createCircle(e.x, e.y, 7.5, 0.95, 0xff1100, () => {
+        } else if (pattern === 1) {
+          // Pattern B: Raffica d'Ala Repellente (Shockwave wind burst + 3 fireballs)
+          sound.swing();
+          particles.spawnShockwave(e.x + dirX * 2.0, e.y + dirY * 2.0, 5.0, 0xfef08a, 0.4);
+          player.knockbackX = dirX * 18;
+          player.knockbackY = dirY * 18;
+          dealEnemyDmg(Math.round(e.stats.damage * 0.75), 'RAFFICA D\'ALA!');
+
+          const baseAngle = Math.atan2(dirX, dirY);
+          [-0.25, 0, 0.25].forEach((offset) => {
+            const a = baseAngle + offset;
+            this.spawnProjectile(e.x, e.y, Math.sin(a) * 14, Math.cos(a) * 14, 0.38, Math.round(e.stats.damage * 0.8), false, 0xffaa00, 0, 'burn');
+          });
+        } else if (pattern === 2) {
+          // Pattern C: Soffio d'Oro Fuso (Fan of 9 molten golden fireballs)
           sound.dragonRoar();
-          particles.spawnShockwave(e.x, e.y, 7.5, 0xff2200, 0.5);
-          particles.spawnBurst(e.x, 1.8, e.y, 45, 0xff5500, 10);
-          if (Math.hypot(player.x - e.x, player.y - e.y) <= 7.5) {
-            dealEnemyDmg(Math.round(e.stats.damage * 1.75), 'CATACLISMA!', true);
+          const numFireballs = 9;
+          const spread = Math.PI * 0.52;
+          const baseAngle = Math.atan2(dirX, dirY);
+          for (let i = 0; i < numFireballs; i++) {
+            const a = baseAngle + (i - (numFireballs - 1) / 2) * (spread / (numFireballs - 1));
+            const vx = Math.sin(a) * 15;
+            const vy = Math.cos(a) * 15;
+            this.spawnProjectile(e.x, e.y, vx, vy, 0.42, e.stats.damage, false, 0xffd700, 0, 'burn');
           }
-        });
+        } else {
+          // Pattern D: Balzo Sismico e Schianto Dorato
+          telegraphs.createCircle(targetX, targetY, 3.4, 0.7, 0xffd700, () => {
+            e.knockbackX = dirX * 20;
+            e.knockbackY = dirY * 20;
+            sound.dragonRoar();
+            this.addScreenShake(0.5);
+            particles.spawnShockwave(targetX, targetY, 4.0, 0xffd700, 0.4);
+            particles.spawnBurst(targetX, 1.4, targetY, 30, 0xffaa00, 8);
+            if (Math.hypot(player.x - targetX, player.y - targetY) < 3.4) {
+              dealEnemyDmg(Math.round(e.stats.damage * 1.35), 'SCHIANTO DORATO!', true);
+            }
+          });
+        }
+
+      } else if (phase === 2) {
+        // === FASE 2: IRA SMERALDINA & RUGGITO SISMICO (60% - 25% HP) ===
+        const pattern = e.attackCount % 4;
+
+        if (pattern === 0) {
+          // Pattern A: Nube Tossica Smeraldo (Poison gas projectiles)
+          sound.dragonRoar();
+          [-0.35, -0.12, 0.12, 0.35].forEach((off) => {
+            const a = Math.atan2(dirX, dirY) + off;
+            const spd = 12;
+            this.spawnProjectile(e.x, e.y, Math.sin(a) * spd, Math.cos(a) * spd, 0.48, Math.round(e.stats.damage * 0.9), false, 0x10b981, 0, 'poison');
+          });
+          particles.spawnBurst(e.x, 1.2, e.y, 25, 0x10b981, 6);
+        } else if (pattern === 1) {
+          // Pattern B: Ruggito Sismico Stordente
+          sound.dragonRoar();
+          this.addScreenShake(0.85);
+          telegraphs.createCircle(e.x, e.y, 6.5, 0.8, 0x10b981, () => {
+            particles.spawnShockwave(e.x, e.y, 6.5, 0x10b981, 0.5);
+            particles.spawnBurst(e.x, 1.5, e.y, 35, 0x34d399, 8);
+            if (Math.hypot(player.x - e.x, player.y - e.y) <= 6.5) {
+              dealEnemyDmg(Math.round(e.stats.damage * 1.4), 'RUGGITO SISMICO!', true);
+              player.knockbackX = dirX * 12;
+              player.knockbackY = dirY * 12;
+            }
+          });
+        } else if (pattern === 2) {
+          // Pattern C: Raffica Tripla Guidata
+          sound.fireball();
+          const baseAngle = Math.atan2(dirX, dirY);
+          for (let i = 0; i < 5; i++) {
+            const a = baseAngle + (i - 2) * 0.22;
+            this.spawnProjectile(e.x, e.y, Math.sin(a) * 16, Math.cos(a) * 16, 0.36, Math.round(e.stats.damage * 1.1), false, 0x059669, 0, 'poison');
+          }
+        } else {
+          // Pattern D: Picchiata Smeraldina Rapida
+          telegraphs.createCircle(targetX, targetY, 3.0, 0.5, 0x10b981, () => {
+            e.knockbackX = dirX * 26;
+            e.knockbackY = dirY * 26;
+            sound.dragonRoar();
+            particles.spawnShockwave(targetX, targetY, 3.6, 0x10b981, 0.35);
+            if (Math.hypot(player.x - targetX, player.y - targetY) < 3.0) {
+              dealEnemyDmg(Math.round(e.stats.damage * 1.35), 'PICCHIATA SMERALDINA!', true);
+            }
+          });
+        }
+
       } else {
-        // Pattern D: Wing Buffet Charge
-        telegraphs.createCircle(targetX, targetY, 3.2, 0.6, 0xff6600, () => {
-          e.knockbackX = dirX * 24;
-          e.knockbackY = dirY * 24;
+        // === FASE 3: APOTEOSI D'ORO (< 25% HP) ===
+        const pattern = e.attackCount % 4;
+
+        if (pattern === 0) {
+          // Pattern A: Pioggia di Meteore Dorate (5 simultaneous celestial golden impacts!)
           sound.dragonRoar();
-          particles.spawnShockwave(targetX, targetY, 3.8, 0xff5500, 0.35);
-          if (Math.hypot(player.x - targetX, player.y - targetY) < 3.2) {
-            dealEnemyDmg(Math.round(e.stats.damage * 1.4), 'PICCHIATA!', true);
+          this.addScreenShake(0.9);
+          const meteorOffsets = [
+            { ox: 0, oy: 0 },
+            { ox: -4.0, oy: 2.5 },
+            { ox: 4.0, oy: -2.5 },
+            { ox: -2.5, oy: -3.5 },
+            { ox: 2.5, oy: 3.5 }
+          ];
+          meteorOffsets.forEach((off) => {
+            const mx = targetX + off.ox;
+            const my = targetY + off.oy;
+            telegraphs.createCircle(mx, my, 2.6, 0.75, 0xffd700, () => {
+              sound.fireball();
+              this.addScreenShake(0.4);
+              particles.spawnShockwave(mx, my, 3.2, 0xffd700, 0.4);
+              particles.spawnBurst(mx, 1.8, my, 30, 0xffaa00, 9);
+              if (Math.hypot(player.x - mx, player.y - my) <= 2.6) {
+                dealEnemyDmg(Math.round(e.stats.damage * 1.55), 'METEORA D\'ORO!', true);
+              }
+            });
+          });
+        } else if (pattern === 1) {
+          // Pattern B: Soffio del Sole d'Oro (Hyperbeam of 13 golden fireballs)
+          sound.dragonRoar();
+          const numFireballs = 13;
+          const spread = Math.PI * 0.65;
+          const baseAngle = Math.atan2(dirX, dirY);
+          for (let i = 0; i < numFireballs; i++) {
+            const a = baseAngle + (i - (numFireballs - 1) / 2) * (spread / (numFireballs - 1));
+            this.spawnProjectile(e.x, e.y, Math.sin(a) * 16.5, Math.cos(a) * 16.5, 0.45, Math.round(e.stats.damage * 1.15), false, 0xffd700, 0, 'burn');
           }
-        });
+        } else if (pattern === 2) {
+          // Pattern C: Cataclisma Solare Radiante (Devastating 8.5m explosion)
+          telegraphs.createCircle(e.x, e.y, 8.5, 0.85, 0xffaa00, () => {
+            sound.dragonRoar();
+            this.addScreenShake(1.2);
+            particles.spawnShockwave(e.x, e.y, 8.5, 0xffd700, 0.6);
+            particles.spawnBurst(e.x, 2.0, e.y, 55, 0xffd700, 11);
+            if (Math.hypot(player.x - e.x, player.y - e.y) <= 8.5) {
+              dealEnemyDmg(Math.round(e.stats.damage * 1.85), 'CATACLISMA D\'ORO!', true);
+            }
+          });
+        } else {
+          // Pattern D: Carica Sismica Supersonica (Super speed dash)
+          telegraphs.createCircle(targetX, targetY, 3.5, 0.45, 0xffd700, () => {
+            e.knockbackX = dirX * 30;
+            e.knockbackY = dirY * 30;
+            sound.dragonRoar();
+            this.addScreenShake(0.6);
+            particles.spawnShockwave(targetX, targetY, 4.2, 0xffd700, 0.4);
+            if (Math.hypot(player.x - targetX, player.y - targetY) < 3.5) {
+              dealEnemyDmg(Math.round(e.stats.damage * 1.6), 'CARICA DEL TITANO!', true);
+            }
+          });
+        }
       }
       return;
     }

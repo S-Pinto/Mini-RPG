@@ -16,12 +16,15 @@ export class Player {
   public moveX = 0;
   public moveY = 0;
   public isMoving = false;
+  public knockbackX = 0;
+  public knockbackY = 0;
 
   public level = 1;
   public xp = 0;
   public xpNext = 65;
   public pendingLevelUps = 0;
   public feats: FeatUpgrade[] = [];
+  public currentFeatChoices: FeatUpgrade[] = [];
   public skillAugments: SkillAugment[] = [];
   public activePacts: DarkPact[] = [];
   public skillCharges: Record<string, number> = {};
@@ -201,6 +204,12 @@ export class Player {
 
     // Smooth sliding collision against room boundaries & walls
     dungeon.moveEntity(room, this, vx, vy);
+
+    if (Math.abs(this.knockbackX) > 0.05 || Math.abs(this.knockbackY) > 0.05) {
+      dungeon.moveEntity(room, this, this.knockbackX * dt, this.knockbackY * dt);
+      this.knockbackX *= Math.pow(0.05, dt);
+      this.knockbackY *= Math.pow(0.05, dt);
+    }
 
     // Face aiming direction or movement direction
     const targetAngle = Math.atan2(this.aimX, this.aimY);

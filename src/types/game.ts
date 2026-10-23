@@ -88,17 +88,63 @@ export type WeaponModelType =
   | 'greataxe' 
   | 'sword' 
   | 'greatsword' 
+  | 'crystal_greatsword'
+  | 'katana'
+  | 'rapier'
   | 'dual_swords' 
   | 'dual_daggers' 
   | 'bow' 
   | 'staff' 
   | 'staff_holy' 
+  | 'serpent_staff'
   | 'wand_tome' 
   | 'mace' 
-  | 'hammer';
+  | 'hammer'
+  | 'scythe'
+  | 'halberd'
+  | 'flail'
+  | 'crossbow';
 
-export type HelmModelType = 'knight_helm' | 'mage_hat' | 'assassin_hood' | 'crown' | 'horned_helm';
-export type ArmorModelType = 'heavy_plate' | 'leather_tunic' | 'mage_robes' | 'chainmail';
+export type HelmModelType = 
+  | 'knight_helm' 
+  | 'mage_hat' 
+  | 'assassin_hood' 
+  | 'crown' 
+  | 'horned_helm'
+  | 'winged_helm'
+  | 'demon_mask'
+  | 'crusader_visage'
+  | 'crown_of_thorns'
+  | 'circlet';
+
+export type ArmorModelType = 
+  | 'heavy_plate' 
+  | 'leather_tunic' 
+  | 'mage_robes' 
+  | 'chainmail'
+  | 'dragon_scale'
+  | 'shadow_mantle'
+  | 'gladiator_harness'
+  | 'frost_cuirass'
+  | 'phoenix_mail'
+  | 'celestial_vestment';
+
+export type RingModelType = 
+  | 'ruby_signet' 
+  | 'sapphire_band' 
+  | 'emerald_coil' 
+  | 'skull_ring'
+  | 'dragon_eye_ring'
+  | 'void_seal';
+
+export type RelicModelType = 
+  | 'holy_grail' 
+  | 'ancient_grimoire' 
+  | 'celestial_hourglass' 
+  | 'dragon_heart_stone' 
+  | 'phoenix_feather'
+  | 'comet_shard'
+  | 'sacred_ankh';
 
 export interface Item {
   id: number;
@@ -115,6 +161,8 @@ export interface Item {
   modelType?: WeaponModelType;
   helmType?: HelmModelType;
   armorType?: ArmorModelType;
+  ringType?: RingModelType;
+  relicType?: RelicModelType;
 }
 
 export type EnemyType = 
@@ -217,7 +265,29 @@ export interface DestructibleProp {
   id: number;
   x: number;
   y: number;
-  type: 'barrel' | 'pot' | 'chest' | 'shrine' | 'table' | 'chair' | 'crate' | 'teleport_pad' | 'shop_counter' | 'skill_crucible' | 'explosive_barrel' | 'toxic_barrel' | 'spike_trap' | 'cage' | 'pact_altar' | 'sarcophagus' | 'weapon_rack' | 'campfire' | 'fire_jet';
+  type: 
+    | 'barrel' 
+    | 'pot' 
+    | 'chest' 
+    | 'shrine' 
+    | 'table' 
+    | 'chair' 
+    | 'crate' 
+    | 'teleport_pad' 
+    | 'shop_counter' 
+    | 'skill_crucible' 
+    | 'explosive_barrel' 
+    | 'toxic_barrel' 
+    | 'spike_trap' 
+    | 'cage' 
+    | 'pact_altar' 
+    | 'sarcophagus' 
+    | 'weapon_rack' 
+    | 'campfire' 
+    | 'fire_jet'
+    | 'secret_wall'
+    | 'rune_puzzle'
+    | 'sealed_chest';
   hp: number;
   mesh?: any;
   opened?: boolean;
@@ -226,6 +296,12 @@ export interface DestructibleProp {
   trapTimer?: number;
   trapActive?: boolean;
   cageFreed?: boolean;
+  runeType?: 'fire' | 'frost' | 'arcane';
+  runeActive?: boolean;
+  sealedChestLocked?: boolean;
+  secretRevealed?: boolean;
+  tileX?: number;
+  tileY?: number;
 }
 
 export interface GroundTelegraph {

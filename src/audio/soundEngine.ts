@@ -86,6 +86,10 @@ class SoundEngine {
 
   // --- Sound Effects ---
 
+  public btnClick(): void {
+    this.playTone(480, 0.05, 'triangle', 0.07, 720);
+  }
+
   public swing(): void {
     // Sword woosh / slash
     this.playTone(320, 0.12, 'sawtooth', 0.08, 90);

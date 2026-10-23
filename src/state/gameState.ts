@@ -101,7 +101,7 @@ function createLootSprite(
 }
 
 export class GameState {
-  public state: 'menu' | 'play' | 'levelup' | 'inventory' | 'paused' | 'over' | 'victory' = 'menu';
+  public state: 'menu' | 'play' | 'levelup' | 'inventory' | 'map' | 'paused' | 'over' | 'victory' = 'menu';
   public currentZoneIndex = 0;
   public currentZone: ZoneConfig;
   public player: Player;
@@ -150,6 +150,12 @@ export class GameState {
         const rar = Math.random() < 0.25 ? 'rare' : 'uncommon';
         const item = generateItem('weapon', this.currentZone.actNumber, rar, this.player.classId);
         this.spawnGroundLoot('item', x, y, undefined, item);
+      }
+    };
+
+    combat.onSecretWallDestroyed = (pr) => {
+      if (pr.tileX !== undefined && pr.tileY !== undefined && this.currentRoom) {
+        this.currentRoom.tiles[pr.tileY][pr.tileX] = 0;
       }
     };
   }
@@ -240,13 +246,18 @@ export class GameState {
 
   public openFastTravelMap(): void {
     if (this.state !== 'play' || !this.currentRoom) return;
+    this.state = 'map';
     modals.showFastTravelMap(this.rooms, this.currentRoom, (target) => {
+      this.state = 'play';
+      modals.close();
       this.teleportPlayerToRoom(target);
     });
   }
 
   public teleportPlayerToRoom(destRoom: DungeonRoom): void {
     if (!destRoom || this.currentRoom === destRoom) return;
+    this.state = 'play';
+    modals.close();
     sound.skill();
     particles.spawnShockwave(this.player.x, this.player.y, 3.5, 0x00ffff);
     particles.spawnBurst(this.player.x, 1.2, this.player.y, 25, 0x00ffff, 7);
@@ -257,7 +268,7 @@ export class GameState {
 
     particles.spawnShockwave(this.player.x, this.player.y, 4.0, 0x8a5cf6);
     particles.spawnBurst(this.player.x, 1.2, this.player.y, 30, 0xa78bfa, 7);
-    particles.spawnFloatingText(this.player.x, 2.6, this.player.y, `Teletrasportato in: ${destRoom.waypointName || 'Stanza'}`, '#c084fc', true);
+    particles.spawnFloatingText(this.player.x, 2.6, this.player.y, `Teletrasportato in: ${destRoom.waypointName || 'Stanza'}`, '#c084fc', true, 'large');
   }
 
   private clearRoomEntities(): void {
@@ -281,6 +292,23 @@ export class GameState {
 
     if (r.type === 'boss') {
       const boss = new Enemy(this.currentZone.bossType, WORLD_W / 2, WORLD_H * 0.35, actMult * 1.5);
+      boss.onPhaseChange = (phase) => {
+        if (phase === 2 && boss.type === 'boss_dragon_vermithrax') {
+          // Spawn Gilded Kobold minions guarding Khloron!
+          const spawnGilded = (ox: number, oy: number) => {
+            const kob = new Enemy('kobold_spearman', boss.x + ox, boss.y + oy, actMult * 1.25);
+            kob.isGildedKobold = true;
+            kob.stats.name = 'Accolito Dorato di Khloron';
+            kob.stats.color = 0xffd700;
+            this.enemies.push(kob);
+            this.dynamicGroup.add(kob.mesh);
+            particles.spawnShockwave(kob.x, kob.y, 2.5, 0xffd700, 0.3);
+            particles.spawnBurst(kob.x, 1.0, kob.y, 20, 0xffd700, 6);
+          };
+          spawnGilded(-4.2, 2.0);
+          spawnGilded(4.2, -2.0);
+        }
+      };
       this.enemies.push(boss);
       this.dynamicGroup.add(boss.mesh);
       sound.dragonRoar();
@@ -361,6 +389,12 @@ export class GameState {
       if (pr.type === 'spike_trap') {
         const cycle = (nowSec + pr.id * 0.7) % 2.4;
         const isActive = cycle > 1.2;
+        if (pr.mesh) {
+          const spikesObj = pr.mesh.getObjectByName('spikes');
+          if (spikesObj) {
+            spikesObj.position.y = isActive ? 0 : -0.38;
+          }
+        }
         if (isActive) {
           // Trap damages player
           if (Math.hypot(this.player.x - pr.x, this.player.y - pr.y) < 1.1) {
@@ -438,6 +472,79 @@ export class GameState {
               particles.spawnBurst(e.x, 0.8, e.y, 6, 0xff5500, 3);
               particles.spawnFloatingText(e.x, 1.8, e.y, '32 🔥 FUOCO', '#ff5500');
             }
+          }
+        }
+      } else if (pr.type === 'teleport_pad') {
+        if (pr.mesh) {
+          const ringOuter = pr.mesh.getObjectByName('teleport_ring_outer');
+          const ringInner = pr.mesh.getObjectByName('teleport_ring_inner');
+          const nexus = pr.mesh.getObjectByName('teleport_nexus');
+          if (ringOuter) ringOuter.rotation.z = nowSec * 0.7;
+          if (ringInner) ringInner.rotation.z = -nowSec * 1.2;
+          if (nexus) {
+            nexus.rotation.y = nowSec * 1.6;
+            nexus.rotation.x = Math.sin(nowSec * 2.0) * 0.25;
+            nexus.position.y = 0.85 + Math.sin(nowSec * 2.5) * 0.1;
+          }
+        }
+      } else if (pr.type === 'rune_puzzle') {
+        if (pr.mesh) {
+          const glyph = pr.mesh.getObjectByName('rune_glyph');
+          const glow = pr.mesh.getObjectByName('rune_glow');
+          const orbits = pr.mesh.getObjectByName('rune_orbits');
+          const light = pr.mesh.getObjectByName('rune_light') as THREE.PointLight | undefined;
+          if (glyph) {
+            glyph.rotation.y = nowSec * (pr.runeActive ? 3.6 : 1.2);
+            glyph.position.y = 0.52 + Math.sin(nowSec * 3 + pr.id) * 0.08;
+          }
+          if (orbits) {
+            orbits.rotation.y = -nowSec * (pr.runeActive ? 2.8 : 1.0);
+          }
+          if (glow) {
+            glow.visible = !!pr.runeActive;
+            glow.rotation.z = nowSec * 2.0;
+          }
+          if (light) {
+            light.intensity = pr.runeActive ? 2.5 + Math.sin(nowSec * 10) * 0.5 : 0.4;
+          }
+        }
+
+        // Stepping on rune activates it!
+        if (!pr.runeActive && Math.hypot(this.player.x - pr.x, this.player.y - pr.y) < 1.15) {
+          pr.runeActive = true;
+          sound.coin();
+          const runeColor = pr.runeType === 'fire' ? 0xff4400 : (pr.runeType === 'frost' ? 0x00f0ff : 0xa855f7);
+          const runeHex = pr.runeType === 'fire' ? '#ff4400' : (pr.runeType === 'frost' ? '#00f0ff' : '#c084fc');
+          const runeName = pr.runeType === 'fire' ? '🔥 RUNA DEL FUOCO' : (pr.runeType === 'frost' ? '❄️ RUNA DEL GELO' : '✨ RUNA DELL\'ARCANO');
+          particles.spawnBurst(pr.x, 0.8, pr.y, 25, runeColor, 5);
+          particles.spawnShockwave(pr.x, pr.y, 2.5, runeColor, 0.3);
+          particles.spawnFloatingText(pr.x, 2.2, pr.y, `${runeName} ATTIVATA!`, runeHex, true, 'large');
+
+          // Check if all runes in current room are active
+          const roomRunes = this.currentRoom.props.filter(p => p.type === 'rune_puzzle');
+          const allActive = roomRunes.length > 0 && roomRunes.every(p => p.runeActive);
+          if (allActive) {
+            for (const chest of this.currentRoom.props) {
+              if (chest.type === 'sealed_chest' && chest.sealedChestLocked) {
+                chest.sealedChestLocked = false;
+                if (chest.mesh) {
+                  const barrier = chest.mesh.getObjectByName('chest_barrier');
+                  if (barrier) barrier.visible = false;
+                }
+                sound.smite();
+                combat.addScreenShake(0.65);
+                particles.spawnShockwave(chest.x, chest.y, 5.0, 0xffd700, 0.5);
+                particles.spawnBurst(chest.x, 1.2, chest.y, 45, 0xffd700, 8);
+                particles.spawnFloatingText(chest.x, 2.8, chest.y, '🔓 FORZIERE ANTICO DISSIGILLATO!', '#ffd700', true);
+              }
+            }
+          }
+        }
+      } else if (pr.type === 'sealed_chest') {
+        if (pr.mesh && pr.sealedChestLocked) {
+          const barrier = pr.mesh.getObjectByName('chest_barrier');
+          if (barrier) {
+            barrier.rotation.y = nowSec * 1.5;
           }
         }
       }
@@ -955,7 +1062,38 @@ export class GameState {
           });
         }
       } else if (dist < 1.8) {
-        if (p.type === 'chest' && !p.opened) {
+        if (p.type === 'sealed_chest') {
+          if (p.sealedChestLocked) {
+            if (!p.opened) {
+              sound.breakProp();
+              particles.spawnShockwave(p.x, p.y, 2.0, 0xa855f7, 0.2);
+              particles.spawnFloatingText(p.x, 2.2, p.y, '🔒 SIGILLATO DALLE RUNE ELEMENTALI!', '#ec4899', true);
+            }
+          } else if (!p.opened) {
+            p.opened = true;
+            sound.chestOpen();
+            sound.smite();
+            combat.addScreenShake(0.7);
+            particles.spawnShockwave(p.x, p.y, 6.0, 0xffd700, 0.6);
+            particles.spawnBurst(p.x, 1.2, p.y, 50, 0xffd700, 10);
+            particles.spawnFloatingText(p.x, 2.8, p.y, '⭐ TESORO DEL FORZIERE ANTICO! ⭐', '#ffd700', true);
+
+            const r1 = Math.random() < 0.4 ? 'legendary' : 'epic';
+            const slots: ('weapon' | 'armor' | 'helm' | 'ring' | 'relic')[] = ['weapon', 'armor', 'helm', 'ring', 'relic'];
+            const slot1 = slots[Math.floor(Math.random() * slots.length)];
+            const item1 = generateItem(slot1, this.currentZone.actNumber, r1, this.player.classId);
+            this.spawnGroundLoot('item', p.x, p.y, undefined, item1);
+
+            const slot2 = slots[Math.floor(Math.random() * slots.length)];
+            const item2 = generateItem(slot2, this.currentZone.actNumber, 'rare', this.player.classId);
+            this.spawnGroundLoot('item', p.x + 0.8, p.y, undefined, item2);
+
+            this.spawnGroundLoot('exp', p.x, p.y - 0.7, 120);
+            this.spawnGroundLoot('coin', p.x - 0.6, p.y, 35);
+            this.spawnGroundLoot('coin', p.x + 0.6, p.y, 35);
+            this.spawnGroundLoot('heart', p.x, p.y + 0.7);
+          }
+        } else if (p.type === 'chest' && !p.opened) {
           p.opened = true;
           sound.chestOpen();
           particles.spawnBurst(p.x, 1.0, p.y, 25, 0xffd700, 6);

@@ -13,6 +13,8 @@ import { sound } from '../audio/soundEngine.ts';
 import { metaProgression, META_UPGRADES } from '../state/metaProgression.ts';
 import { getRandomPacts } from '../items/pactsDatabase.ts';
 import { BESTIARY_DATA, WEAPON_COMPENDIUM } from '../items/codexDatabase.ts';
+import { item3DViewer } from '../graphics/item3DViewer.ts';
+import { hero3DViewer } from '../graphics/hero3DViewer.ts';
 
 export interface LeaderboardEntry {
   name: string;
@@ -110,6 +112,7 @@ export class ModalManager {
   public isShopOpen = false;
   private shopInventory: Item[] = [];
   private shopInventoryZone = 0;
+  private selectedClassTab: ClassId = 'fighter';
 
   public onClassSelected: ((classId: ClassId, subclassIndex: number) => void) | null = null;
   public onFeatChosen: ((feat: FeatUpgrade) => void) | null = null;
@@ -137,6 +140,8 @@ export class ModalManager {
   }
 
   public hideAll(): void {
+    item3DViewer.stop();
+    hero3DViewer.stop();
     if (this.overlay) this.overlay.classList.remove('active');
     [
       this.introPanel,
@@ -397,7 +402,7 @@ export class ModalManager {
     }
   }
 
-  // --- 1. Class and Subclass Selection ---
+  // --- 1. Class and Subclass Selection (Clean Hero Showcase Design) ---
   public showClassSelect(): void {
     this.hideAll();
     if (!this.overlay || !this.classSelectPanel) return;
@@ -408,53 +413,186 @@ export class ModalManager {
     const container = document.getElementById('class-cards-container');
     if (!container) return;
 
-    container.innerHTML = Object.values(CLASSES_DATA).map(c => {
-      const sub0 = c.subclasses[0];
-      const sub1 = c.subclasses[1];
+    const classIcons: Record<ClassId, string> = {
+      fighter: '⚔️',
+      wizard: '⚡',
+      rogue: '🗡️',
+      paladin: '✨',
+      cleric: '🛡️'
+    };
 
-      return `
-        <div class="class-card" style="--accent:${c.color}">
-          <div class="class-header">
-            <h3>${c.name}</h3>
-            <span class="dnd-title">${c.dndTitle}</span>
-          </div>
-          <p class="class-role">${c.role}</p>
-          <p class="class-desc">${c.description}</p>
-          
-          <div class="skill-preview">
-            <div><b>Attacco Base:</b> ${c.basicAttackName}</div>
-            <div><b>Abilità Primaria:</b> ${c.skill1.icon} ${c.skill1.name} <span class="skill-cd">(CD: ${c.skill1.cd}s)</span></div>
+    const roleBadges: Record<ClassId, string> = {
+      fighter: 'Mischia & Danno Fisico',
+      wizard: 'Incantatore DPS Devastante',
+      rogue: 'Agilità & Critici Furtivi',
+      paladin: 'Campione Sacro & Difesa',
+      cleric: 'Tempesta & Risanamento'
+    };
+
+    const renderShowcase = () => {
+      const classesList = Object.values(CLASSES_DATA);
+      const activeClass = CLASSES_DATA[this.selectedClassTab] || classesList[0];
+      const sub0 = activeClass.subclasses[0];
+      const sub1 = activeClass.subclasses[1];
+
+      container.innerHTML = `
+        <div class="class-showcase-wrapper" style="--accent:${activeClass.color};">
+          <!-- Class Tabs Selector Row -->
+          <div class="class-tabs-bar">
+            ${classesList.map(c => {
+              const isSelected = c.id === this.selectedClassTab;
+              return `
+                <button class="class-tab-btn ${isSelected ? 'active' : ''}" data-class-tab="${c.id}" style="--tab-color:${c.color};">
+                  <span class="tab-icon">${classIcons[c.id]}</span>
+                  <div class="tab-text-wrap">
+                    <span class="tab-class-name">${c.name}</span>
+                    <span class="tab-role-tag">${roleBadges[c.id]}</span>
+                  </div>
+                </button>
+              `;
+            }).join('')}
           </div>
 
-          <div class="subclass-pickers">
-            <button class="btn-subclass" data-class="${c.id}" data-sub="0">
-              <div class="sub-name-row"><b>${sub0.name}</b></div>
-              <div class="sub-gear-row">⚔️ <i>${sub0.weaponName}</i></div>
-              <div class="sub-skill-row">${sub0.skill2.icon} <b>Abilità 2:</b> ${sub0.skill2.name}</div>
-              <small>${sub0.bonusDesc}</small>
-            </button>
-            <button class="btn-subclass" data-class="${c.id}" data-sub="1">
-              <div class="sub-name-row"><b>${sub1.name}</b></div>
-              <div class="sub-gear-row">⚔️ <i>${sub1.weaponName}</i></div>
-              <div class="sub-skill-row">${sub1.skill2.icon} <b>Abilità 2:</b> ${sub1.skill2.name}</div>
-              <small>${sub1.bonusDesc}</small>
-            </button>
+          <!-- Hero Main Showcase Stage (2-Column Split) -->
+          <div class="hero-stage-layout">
+            <!-- Left Column: Hero Identity & Core Abilities -->
+            <div class="hero-identity-card">
+              <div class="hero-banner">
+                <div class="hero-crest-circle">
+                  <span class="hero-crest-icon">${classIcons[activeClass.id]}</span>
+                </div>
+                <div class="hero-title-group">
+                  <div class="hero-name-row">
+                    <h2 class="hero-name">${activeClass.name}</h2>
+                    <span class="hero-dnd-archetype">${activeClass.dndTitle}</span>
+                  </div>
+                  <span class="hero-role-pill">${activeClass.role}</span>
+                </div>
+              </div>
+
+              <p class="hero-lore-desc">${activeClass.description}</p>
+
+              <!-- Core Stats Grid -->
+              <div class="hero-stats-panel">
+                <div class="stat-pill"><span class="stat-icon">❤️</span> <span class="stat-label">Salute:</span> <b>${activeClass.baseStats.hp}</b></div>
+                <div class="stat-pill"><span class="stat-icon">⚔️</span> <span class="stat-label">Danno:</span> <b>${activeClass.baseStats.damage}</b></div>
+                <div class="stat-pill"><span class="stat-icon">🛡️</span> <span class="stat-label">Armatura:</span> <b>${activeClass.baseStats.armor}</b></div>
+                <div class="stat-pill"><span class="stat-icon">🎯</span> <span class="stat-label">Critico:</span> <b>${activeClass.baseStats.critChance}%</b></div>
+                <div class="stat-pill"><span class="stat-icon">⚡</span> <span class="stat-label">Velocità:</span> <b>${activeClass.baseStats.speed}</b></div>
+              </div>
+
+              <!-- Base Combat Kit -->
+              <div class="hero-skills-block">
+                <h4 class="skills-block-title">⚔️ Arsenale di Base:</h4>
+                <div class="skill-row">
+                  <div class="skill-row-header">
+                    <span class="skill-badge-type">Attacco Base [Mouse SX]</span>
+                    <span class="skill-title">${activeClass.basicAttackName}</span>
+                  </div>
+                  <p class="skill-row-desc">${activeClass.basicAttackDesc}</p>
+                </div>
+                <div class="skill-row">
+                  <div class="skill-row-header">
+                    <span class="skill-badge-type primary">Primaria [Q]</span>
+                    <span class="skill-title">${activeClass.skill1.icon} ${activeClass.skill1.name}</span>
+                    <span class="skill-cd-badge">CD: ${activeClass.skill1.cd}s</span>
+                  </div>
+                  <p class="skill-row-desc">${activeClass.skill1.desc}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Column: Subclass Specializations -->
+            <div class="hero-subclasses-card">
+              <div class="subclasses-header">
+                <h3 class="subclasses-main-title">🔮 SPECIALIZZAZIONE D&D</h3>
+                <p class="subclasses-subtitle">Scegli la sottoclasse per definire il tuo stile di combattimento e la tua abilità secondaria [E]:</p>
+              </div>
+
+              <div class="subclasses-choices">
+                <!-- Subclass 1 -->
+                <div class="subclass-option-card">
+                  <div class="sub-card-top">
+                    <div>
+                      <span class="sub-spec-title">${sub0.name}</span>
+                      <div class="sub-weapon-pill">⚔️ Arma: <i>${sub0.weaponName}</i></div>
+                    </div>
+                  </div>
+                  <div class="sub-skill-box">
+                    <div class="sub-skill-header">
+                      <span class="skill-badge-type secondary">Abilità Secondaria [E]</span>
+                      <b class="sub-skill-name">${sub0.skill2.icon} ${sub0.skill2.name}</b>
+                      <span class="skill-cd-badge">CD: ${sub0.skill2.cd}s</span>
+                    </div>
+                    <p class="sub-skill-desc">${sub0.skill2.desc}</p>
+                  </div>
+                  <div class="sub-trait-row">
+                    <span class="sub-trait-icon">📜</span>
+                    <span class="sub-trait-text"><b>Tratto Passivo:</b> ${sub0.bonusDesc}</span>
+                  </div>
+                  <button class="btn-play-subclass" data-class="${activeClass.id}" data-sub="0">
+                    <span>⚔️ GIOCA COME ${sub0.name.toUpperCase()}</span>
+                    <span class="btn-arrow">➔</span>
+                  </button>
+                </div>
+
+                <!-- Subclass 2 -->
+                <div class="subclass-option-card">
+                  <div class="sub-card-top">
+                    <div>
+                      <span class="sub-spec-title">${sub1.name}</span>
+                      <div class="sub-weapon-pill">⚔️ Arma: <i>${sub1.weaponName}</i></div>
+                    </div>
+                  </div>
+                  <div class="sub-skill-box">
+                    <div class="sub-skill-header">
+                      <span class="skill-badge-type secondary">Abilità Secondaria [E]</span>
+                      <b class="sub-skill-name">${sub1.skill2.icon} ${sub1.skill2.name}</b>
+                      <span class="skill-cd-badge">CD: ${sub1.skill2.cd}s</span>
+                    </div>
+                    <p class="sub-skill-desc">${sub1.skill2.desc}</p>
+                  </div>
+                  <div class="sub-trait-row">
+                    <span class="sub-trait-icon">📜</span>
+                    <span class="sub-trait-text"><b>Tratto Passivo:</b> ${sub1.bonusDesc}</span>
+                  </div>
+                  <button class="btn-play-subclass" data-class="${activeClass.id}" data-sub="1">
+                    <span>⚔️ GIOCA COME ${sub1.name.toUpperCase()}</span>
+                    <span class="btn-arrow">➔</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       `;
-    }).join('');
 
-    container.querySelectorAll('.btn-subclass').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const target = (e.currentTarget as HTMLElement);
-        const classId = target.dataset.class as ClassId;
-        const subIndex = Number(target.dataset.sub);
-        sound.init();
-        sound.levelUp();
-        this.hideAll();
-        if (this.onClassSelected) this.onClassSelected(classId, subIndex);
+      // Bind tab clicks
+      container.querySelectorAll<HTMLButtonElement>('.class-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tabId = btn.dataset.classTab as ClassId;
+          if (tabId && tabId !== this.selectedClassTab) {
+            this.selectedClassTab = tabId;
+            sound.btnClick();
+            renderShowcase();
+          }
+        });
       });
-    });
+
+      // Bind play subclass clicks
+      container.querySelectorAll<HTMLButtonElement>('.btn-play-subclass').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const classId = btn.dataset.class as ClassId;
+          const subIndex = Number(btn.dataset.sub);
+          sound.init();
+          sound.levelUp();
+          this.hideAll();
+          if (this.onClassSelected) this.onClassSelected(classId, subIndex);
+        });
+      });
+    };
+
+    renderShowcase();
 
     const btnBack = document.getElementById('btn-back-from-class-select');
     if (btnBack) {
@@ -482,8 +620,11 @@ export class ModalManager {
     const container = document.getElementById('feat-cards-container');
     if (!container) return;
 
-    const renderCards = () => {
-      const feats = getRandomFeatChoices(3, player.classId);
+    const renderCards = (forceReroll = false) => {
+      if (forceReroll || !player.currentFeatChoices || player.currentFeatChoices.length === 0) {
+        player.currentFeatChoices = getRandomFeatChoices(3, player.classId);
+      }
+      const feats = player.currentFeatChoices;
       const rarityLabels: Record<string, string> = {
         common: 'COMUNE',
         rare: 'RARO',
@@ -523,12 +664,14 @@ export class ModalManager {
       container.querySelectorAll('.feat-card').forEach((card, i) => {
         card.addEventListener('click', () => {
           sound.levelUp();
-          if (this.onFeatChosen) this.onFeatChosen(feats[i]);
+          const chosenFeat = feats[i];
+          player.currentFeatChoices = []; // Reset after selection
+          if (this.onFeatChosen) this.onFeatChosen(chosenFeat);
         });
       });
     };
 
-    renderCards();
+    renderCards(false);
 
     // Re-roll button (50 gold)
     const btnReroll = document.getElementById('btn-reroll-feats');
@@ -539,7 +682,7 @@ export class ModalManager {
         if (player.gold >= 50) {
           player.gold -= 50;
           sound.coin();
-          renderCards();
+          renderCards(true);
         } else {
           sound.playerHurt();
           fresh.textContent = '❌ Oro Insufficiente (50)!';
@@ -555,6 +698,7 @@ export class ModalManager {
       btnSkip.parentNode?.replaceChild(fresh, btnSkip);
       fresh.addEventListener('click', () => {
         player.gold += 75;
+        player.currentFeatChoices = []; // Reset after skip
         sound.coin();
         player.pendingLevelUps = Math.max(0, player.pendingLevelUps - 1);
         if (player.pendingLevelUps > 0) {
@@ -566,7 +710,7 @@ export class ModalManager {
       });
     }
 
-    // Close and choose later button
+    // Close and choose later button (persists choices!)
     const btnClose = document.getElementById('btn-close-levelup');
     if (btnClose) {
       const fresh = btnClose.cloneNode(true) as HTMLElement;
@@ -657,22 +801,30 @@ export class ModalManager {
 
       return `
         <div class="inspect-card equipped-mode" style="--rar-color:${rar.color};">
-          <div class="inspect-card-header">
-            <div class="inspect-icon-wrap" style="border-color:${rar.color};">
-              <span class="inspect-icon">${item.icon || '🛡️'}</span>
+          <div class="inspect-top-row">
+            <div class="inspect-3d-stage">
+              <canvas id="inspect-3d-canvas" class="inspect-3d-canvas" width="260" height="170"></canvas>
+              <div class="inspect-3d-badge">MODELLO 3D INTERATTIVO</div>
+              <div class="inspect-3d-hint">🔄 Trascina per ruotare a 360°</div>
             </div>
-            <div class="inspect-header-info">
-              <div class="inspect-title" style="color:${rar.color};">${item.name}</div>
-              <div class="inspect-subtitle">[${rar.name}] · ${slotNames[item.slot]} · Livello ${item.ilvl}</div>
-            </div>
-            <span class="inspect-badge-equipped">INDOSSATO</span>
-          </div>
-
-          <div class="inspect-card-body">
-            <div class="inspect-col full-width">
-              <div class="inspect-section-label">STATISTICHE ATTUALI:</div>
-              <div class="inspect-stats-list">${statsHtml}</div>
-              <div class="inspect-sell-gold">💰 Valore di vendita: <b>+${item.goldValue} Oro</b></div>
+            <div class="inspect-card-header-col">
+              <div class="inspect-card-header">
+                <div class="inspect-icon-wrap" style="border-color:${rar.color};">
+                  <span class="inspect-icon">${item.icon || '🛡️'}</span>
+                </div>
+                <div class="inspect-header-info">
+                  <div class="inspect-title" style="color:${rar.color};">${item.name}</div>
+                  <div class="inspect-subtitle">[${rar.name}] · ${slotNames[item.slot]} · Livello ${item.ilvl}</div>
+                </div>
+                <span class="inspect-badge-equipped">INDOSSATO</span>
+              </div>
+              <div class="inspect-card-body">
+                <div class="inspect-col full-width">
+                  <div class="inspect-section-label">STATISTICHE ATTUALI:</div>
+                  <div class="inspect-stats-list">${statsHtml}</div>
+                  <div class="inspect-sell-gold">💰 Valore di vendita: <b>+${item.goldValue} Oro</b></div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -718,29 +870,36 @@ export class ModalManager {
 
       return `
         <div class="inspect-card ${isUpgrade ? 'card-upgrade' : ''}" style="--rar-color:${selRar.color};">
-          <div class="inspect-card-header">
-            <div class="inspect-icon-wrap" style="border-color:${selRar.color};">
-              <span class="inspect-icon">${selectedItem.icon || '📦'}</span>
+          <div class="inspect-top-row">
+            <div class="inspect-3d-stage">
+              <canvas id="inspect-3d-canvas" class="inspect-3d-canvas" width="260" height="170"></canvas>
+              <div class="inspect-3d-badge">MODELLO 3D INTERATTIVO</div>
+              <div class="inspect-3d-hint">🔄 Trascina per ruotare a 360°</div>
             </div>
-            <div class="inspect-header-info">
-              <div class="inspect-title" style="color:${selRar.color};">${selectedItem.name}</div>
-              <div class="inspect-subtitle">[${selRar.name}] · ${slotNames[selectedItem.slot]} · Livello ${selectedItem.ilvl}</div>
-            </div>
-            ${isUpgrade ? '<span class="inspect-badge-upgrade">✨ MIGLIORAMENTO</span>' : ''}
-          </div>
-
-          <div class="inspect-card-body">
-            <div class="inspect-columns">
-              <div class="inspect-col">
-                <div class="inspect-section-label">STATISTICHE OGGETTO:</div>
-                <div class="inspect-stats-list">${itemStatsHtml}</div>
-                <div class="inspect-sell-gold">💰 Valore vendita: <b>+${selectedItem.goldValue} Oro</b></div>
+            <div class="inspect-card-header-col">
+              <div class="inspect-card-header">
+                <div class="inspect-icon-wrap" style="border-color:${selRar.color};">
+                  <span class="inspect-icon">${selectedItem.icon || '📦'}</span>
+                </div>
+                <div class="inspect-header-info">
+                  <div class="inspect-title" style="color:${selRar.color};">${selectedItem.name}</div>
+                  <div class="inspect-subtitle">[${selRar.name}] · ${slotNames[selectedItem.slot]} · Livello ${selectedItem.ilvl}</div>
+                </div>
+                ${isUpgrade ? '<span class="inspect-badge-upgrade">✨ MIGLIORAMENTO</span>' : ''}
               </div>
-
-              <div class="inspect-col">
-                <div class="inspect-section-label">VARIAZIONE VS INDOSSATO:</div>
-                <div class="inspect-deltas-grid">${deltasHtml}</div>
-                ${currentEquipped ? `<div class="inspect-vs-text">Confrontato con: <i>${currentEquipped.name}</i></div>` : '<div class="inspect-vs-text">Nessun oggetto attualmente in questo slot</div>'}
+              <div class="inspect-card-body">
+                <div class="inspect-columns">
+                  <div class="inspect-col">
+                    <div class="inspect-section-label">STATISTICHE OGGETTO:</div>
+                    <div class="inspect-stats-list">${itemStatsHtml}</div>
+                    <div class="inspect-sell-gold">💰 Valore vendita: <b>+${selectedItem.goldValue} Oro</b></div>
+                  </div>
+                  <div class="inspect-col">
+                    <div class="inspect-section-label">VARIAZIONE VS INDOSSATO:</div>
+                    <div class="inspect-deltas-grid">${deltasHtml}</div>
+                    ${currentEquipped ? `<div class="inspect-vs-text">Confrontato con: <i>${currentEquipped.name}</i></div>` : '<div class="inspect-vs-text">Nessun oggetto attualmente in questo slot</div>'}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -764,7 +923,7 @@ export class ModalManager {
         <div class="inspect-empty-notice">
           <span class="empty-icon">🎒</span>
           <div class="empty-title">Nessun oggetto selezionato</div>
-          <p class="empty-desc">Clicca su un oggetto nello zaino o su un pezzo indossato per visualizzarne dettagli e statistiche.</p>
+          <p class="empty-desc">Clicca su un oggetto nello zaino o su un pezzo indossato per visualizzarne dettagli, modello 3D e statistiche.</p>
         </div>
       </div>
     `;
@@ -797,6 +956,36 @@ export class ModalManager {
     });
   }
 
+  // Mount 3D Item Inspector
+  private mount3DInspector(player: Player): void {
+    const canvas = document.getElementById('inspect-3d-canvas') as HTMLCanvasElement | null;
+    if (!canvas) {
+      item3DViewer.stop();
+      return;
+    }
+    let itemToInspect: Item | undefined;
+    if (this.selectedEquipSlot && player.equip[this.selectedEquipSlot]) {
+      itemToInspect = player.equip[this.selectedEquipSlot];
+    } else if (this.selectedBagIndex >= 0 && player.bag[this.selectedBagIndex]) {
+      itemToInspect = player.bag[this.selectedBagIndex];
+    }
+    if (itemToInspect) {
+      item3DViewer.mount(canvas, itemToInspect);
+    } else {
+      item3DViewer.stop();
+    }
+  }
+
+  // Mount 3D Hero Preview Viewer in Paperdoll
+  private mount3DHeroViewer(player: Player): void {
+    const canvas = document.getElementById('hero-3d-canvas') as HTMLCanvasElement | null;
+    if (!canvas) {
+      hero3DViewer.stop();
+      return;
+    }
+    hero3DViewer.mount(canvas, player);
+  }
+
   // Update selection without full re-render
   private updateSelectionAndInspect(player: Player): void {
     if (!this.inventoryPanel) return;
@@ -826,6 +1015,7 @@ export class ModalManager {
     if (inspectPanel) {
       inspectPanel.innerHTML = this.renderInspectHtml(player);
       this.bindInspectEvents(player);
+      this.mount3DInspector(player);
     }
   }
 
@@ -988,21 +1178,25 @@ export class ModalManager {
           <div class="inv-hero-column">
             <div class="paperdoll-showcase">
               <div class="paperdoll-title-bar">
-                <span>🛡️ EQUIPAGGIAMENTO INDOSSATO</span>
-                <span class="paperdoll-hint">Clicca un pezzo per ispezionarlo</span>
+                <div class="pd-title-left">
+                  <span class="pd-title-main">🛡️ EQUIPAGGIAMENTO INDOSSATO</span>
+                  <span class="paperdoll-hint">Clicca uno slot per ispezionare il pezzo</span>
+                </div>
+                <div class="pd-hero-badge" title="Specializzazione Attuale">
+                  <span class="pd-badge-icon">${classIcons[player.classId] || '⚔️'}</span>
+                  <span class="pd-badge-name">${player.subclass.name}</span>
+                </div>
               </div>
 
               <div class="paperdoll-stage">
-                <!-- Center Hero Crest & Title -->
-                <div class="pd-hero-center">
-                  <div class="pd-hero-ring">
-                    <span class="pd-hero-icon">${classIcons[player.classId] || '🛡️'}</span>
-                  </div>
-                  <div class="pd-hero-label">${player.subclass.name}</div>
-                  <div class="pd-hero-sub">${player.classId.toUpperCase()}</div>
+                <!-- 3D Player Character Live Stage -->
+                <div class="hero-3d-stage-wrap">
+                  <canvas id="hero-3d-canvas" class="hero-3d-canvas" width="220" height="260"></canvas>
+                  <div class="hero-3d-pedestal-glow"></div>
+                  <div class="hero-3d-hint">🔄 Ruota l'eroe a 360°</div>
                 </div>
 
-                <!-- Anatomical 5 Gear Slots -->
+                <!-- Anatomical 5 Gear Slots Framing Hero -->
                 <div class="pd-slot-pos pd-pos-helm">
                   ${renderPaperdollSlot('helm')}
                 </div>
@@ -1258,8 +1452,10 @@ export class ModalManager {
       });
     });
 
-    // Bind initial inspect card actions
+    // Bind initial inspect card actions & 3D hero viewer
     this.bindInspectEvents(player);
+    this.mount3DInspector(player);
+    this.mount3DHeroViewer(player);
   }
 
   // --- 4. Messages Dialog (Death / Victory / Pause) ---
@@ -1394,7 +1590,8 @@ export class ModalManager {
 
     // Close button
     document.getElementById('map-btn-close')?.addEventListener('click', () => {
-      this.hideAll();
+      this.close();
+      if (this.onResumeGame) this.onResumeGame();
     });
 
     // Teleport buttons
@@ -1404,7 +1601,8 @@ export class ModalManager {
         const targetRoom = waypoints.find(r => `${r.x},${r.y}` === targetKey);
         if (targetRoom) {
           sound.teleport();
-          this.hideAll();
+          this.close();
+          if (this.onResumeGame) this.onResumeGame();
           onTeleport(targetRoom);
         }
       });
@@ -1531,7 +1729,8 @@ export class ModalManager {
         const rh = cellSize - 8;
         if (clickX >= rx && clickX <= rx + rw && clickY >= ry && clickY <= ry + rh) {
           sound.teleport();
-          this.hideAll();
+          this.close();
+          if (this.onResumeGame) this.onResumeGame();
           onTeleport(r);
         }
       });

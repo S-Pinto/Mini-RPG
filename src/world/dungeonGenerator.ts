@@ -16,7 +16,17 @@ export const DOOR_Y = 6;
 export const DOOR_CX = DOOR_X * TILE_SIZE + TILE_SIZE / 2;
 export const DOOR_CY = DOOR_Y * TILE_SIZE + TILE_SIZE / 2;
 
-export type RoomShape = 'quadrant_sanctuary' | 'twin_crypts' | 'winding_catacombs' | 'pillared_halls' | 'rotunda_colonnade' | 'split_courtyard';
+export type RoomShape = 
+  | 'quadrant_sanctuary' 
+  | 'twin_crypts' 
+  | 'winding_catacombs' 
+  | 'pillared_halls' 
+  | 'rotunda_colonnade' 
+  | 'split_courtyard'
+  | 'grand_bridge_chasm'
+  | 'elevated_sanctuary'
+  | 'catacomb_labyrinth'
+  | 'dragon_colosseum';
 
 export interface DungeonRoom {
   x: number;
@@ -192,14 +202,83 @@ export class DungeonGenerator {
       'winding_catacombs',
       'pillared_halls',
       'rotunda_colonnade',
-      'split_courtyard'
+      'split_courtyard',
+      'grand_bridge_chasm',
+      'elevated_sanctuary',
+      'catacomb_labyrinth'
     ];
     let chosenShape: RoomShape = r.type === 'start' 
       ? 'pillared_halls' 
-      : (r.type === 'boss' ? 'rotunda_colonnade' : shapes[Math.floor(Math.random() * shapes.length)]);
+      : (r.type === 'boss' ? 'dragon_colosseum' : shapes[Math.floor(Math.random() * shapes.length)]);
     r.shape = chosenShape;
 
     switch (chosenShape) {
+      case 'grand_bridge_chasm': {
+        // Deep abyss chasm running across rows 4 and 8
+        // Spanned by an elevated grand stone bridge (cols 7..11) and flank catwalks (cols 2..3 and 15..16)
+        for (const cy of [4, 8]) {
+          for (let x = 1; x < ROOM_WIDTH - 1; x++) {
+            if (!(x >= 7 && x <= 11) && !(x >= 2 && x <= 3) && !(x >= 15 && x <= 16)) {
+              tiles[cy][x] = 4; // chasm pit
+            }
+          }
+        }
+        // Guard pillars flanking the bridge entrances
+        tiles[3][6] = 2; tiles[3][12] = 2;
+        tiles[9][6] = 2; tiles[9][12] = 2;
+        break;
+      }
+
+      case 'elevated_sanctuary': {
+        // Grand sanctuary with central dais pillars and corner prayer alcoves
+        for (const py of [3, 9]) {
+          for (const px of [5, 13]) {
+            tiles[py][px] = 2;
+          }
+        }
+        tiles[2][3] = 1; tiles[2][ROOM_WIDTH - 4] = 1;
+        tiles[ROOM_HEIGHT - 3][3] = 1; tiles[ROOM_HEIGHT - 3][ROOM_WIDTH - 4] = 1;
+        break;
+      }
+
+      case 'catacomb_labyrinth': {
+        // Dense labyrinth with winding partitions and hidden alcoves
+        for (let x = 3; x <= 7; x++) tiles[3][x] = 1;
+        for (let x = 11; x <= 15; x++) tiles[3][x] = 1;
+        for (let x = 3; x <= 7; x++) tiles[9][x] = 1;
+        for (let x = 11; x <= 15; x++) tiles[9][x] = 1;
+        for (let y = 4; y <= 8; y++) {
+          if (y !== 6) {
+            tiles[y][4] = 1;
+            tiles[y][14] = 1;
+          }
+        }
+        tiles[6][3] = 2;
+        tiles[6][15] = 2;
+        break;
+      }
+
+      case 'dragon_colosseum': {
+        // Massive circular gladiatorial arena for Boss encounters
+        // Corner bastions
+        tiles[1][1] = 1; tiles[1][2] = 1; tiles[2][1] = 1;
+        tiles[1][ROOM_WIDTH - 2] = 1; tiles[1][ROOM_WIDTH - 3] = 1; tiles[2][ROOM_WIDTH - 2] = 1;
+        tiles[ROOM_HEIGHT - 2][1] = 1; tiles[ROOM_HEIGHT - 2][2] = 1; tiles[ROOM_HEIGHT - 3][1] = 1;
+        tiles[ROOM_HEIGHT - 2][ROOM_WIDTH - 2] = 1; tiles[ROOM_HEIGHT - 2][ROOM_WIDTH - 3] = 1; tiles[ROOM_HEIGHT - 3][ROOM_WIDTH - 2] = 1;
+
+        // Grand Colosseum colonnade of 10 massive pillars providing tactical cover
+        const colosseumPillars = [
+          [4, 2], [9, 2], [14, 2],
+          [3, 4], [15, 4],
+          [3, 8], [15, 8],
+          [4, 10], [9, 10], [14, 10]
+        ];
+        for (const [px, py] of colosseumPillars) {
+          tiles[py][px] = 2;
+        }
+        break;
+      }
+
       case 'quadrant_sanctuary': {
         // Internal partition walls forming 4 distinct sub-rooms with arched doorways
         // Vertical partitions at x=5 and x=13
@@ -328,9 +407,17 @@ export class DungeonGenerator {
     r.tiles = tiles;
   }
 
-  // Find a guaranteed valid, non-blocked floor tile inside the room
+  // Find a guaranteed valid, non-blocked floor tile inside the room, avoiding overlapping props and door areas
   public findFreeSpot(r: DungeonRoom, minFromPlayerX = 0, minFromPlayerY = 0, minDist = 0): { x: number; y: number } {
     const candidates: { x: number; y: number }[] = [];
+    const relaxedCandidates: { x: number; y: number }[] = [];
+
+    const doorPositions = [
+      { x: DOOR_CX, y: TILE_SIZE * 0.5 },
+      { x: DOOR_CX, y: (ROOM_HEIGHT - 0.5) * TILE_SIZE },
+      { x: TILE_SIZE * 0.5, y: DOOR_CY },
+      { x: (ROOM_WIDTH - 0.5) * TILE_SIZE, y: DOOR_CY }
+    ];
 
     for (let ty = 1; ty < ROOM_HEIGHT - 1; ty++) {
       for (let tx = 1; tx < ROOM_WIDTH - 1; tx++) {
@@ -339,6 +426,16 @@ export class DungeonGenerator {
           const worldY = ty * TILE_SIZE + TILE_SIZE / 2;
           const dist = Math.hypot(worldX - minFromPlayerX, worldY - minFromPlayerY);
           if (dist >= minDist) {
+            relaxedCandidates.push({ x: worldX, y: worldY });
+
+            // Do not spawn right in front of any doorway
+            const nearDoor = doorPositions.some(d => Math.hypot(worldX - d.x, worldY - d.y) < 2.2);
+            if (nearDoor) continue;
+
+            // Do not spawn on top of or too close to an existing prop
+            const nearProp = r.props.some(p => Math.hypot(p.x - worldX, p.y - worldY) < 1.7);
+            if (nearProp) continue;
+
             candidates.push({ x: worldX, y: worldY });
           }
         }
@@ -347,6 +444,15 @@ export class DungeonGenerator {
 
     if (candidates.length > 0) {
       return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+    if (relaxedCandidates.length > 0) {
+      // Pick relaxed candidate with max distance from existing props
+      relaxedCandidates.sort((a, b) => {
+        const minA = r.props.reduce((acc, p) => Math.min(acc, Math.hypot(p.x - a.x, p.y - a.y)), 999);
+        const minB = r.props.reduce((acc, p) => Math.min(acc, Math.hypot(p.x - b.x, p.y - b.y)), 999);
+        return minB - minA;
+      });
+      return relaxedCandidates[0];
     }
     return { x: WORLD_W / 2, y: WORLD_H / 2 };
   }
@@ -569,7 +675,68 @@ export class DungeonGenerator {
         });
       }
 
-      // 3. Captive Ally Cage (guaranteed once per floor)
+      // 3. Interactive Elemental Rune Puzzle & Sealed Chest (40% chance in normal rooms or elevated sanctuary)
+      if (r.shape === 'elevated_sanctuary' || Math.random() < 0.4) {
+        const runeTypes: ('fire' | 'frost' | 'arcane')[] = ['fire', 'frost', 'arcane'];
+        const numRunes = r.shape === 'elevated_sanctuary' ? 3 : 2;
+        for (let i = 0; i < numRunes; i++) {
+          const rSpot = this.findFreeSpot(r, tSpot.x, tSpot.y, 2.5);
+          r.props.push({
+            id: ++propSeq,
+            x: rSpot.x,
+            y: rSpot.y,
+            type: 'rune_puzzle',
+            hp: 9999,
+            runeType: runeTypes[i],
+            runeActive: false
+          });
+        }
+        // Associated Sealed Chest
+        const cSpot = this.findFreeSpot(r, tSpot.x, tSpot.y, 2.5);
+        r.props.push({
+          id: ++propSeq,
+          x: cSpot.x,
+          y: cSpot.y,
+          type: 'sealed_chest',
+          hp: 9999,
+          sealedChestLocked: true,
+          opened: false
+        });
+      }
+
+      // 4. Secret Wall Alcove (45% chance or guaranteed in catacomb labyrinth)
+      if (r.shape === 'catacomb_labyrinth' || Math.random() < 0.45) {
+        // Find an internal wall candidate with adjacent floor
+        let foundWall = false;
+        for (let wy = 2; wy < ROOM_HEIGHT - 2 && !foundWall; wy++) {
+          for (let wx = 2; wx < ROOM_WIDTH - 2 && !foundWall; wx++) {
+            if (r.tiles[wy][wx] === 1) {
+              // Check if it has a floor neighbor
+              const hasFloor = (
+                r.tiles[wy - 1][wx] === 0 ||
+                r.tiles[wy + 1][wx] === 0 ||
+                r.tiles[wy][wx - 1] === 0 ||
+                r.tiles[wy][wx + 1] === 0
+              );
+              if (hasFloor) {
+                r.props.push({
+                  id: ++propSeq,
+                  x: wx * TILE_SIZE + TILE_SIZE / 2,
+                  y: wy * TILE_SIZE + TILE_SIZE / 2,
+                  type: 'secret_wall',
+                  hp: 30,
+                  tileX: wx,
+                  tileY: wy,
+                  secretRevealed: false
+                });
+                foundWall = true;
+              }
+            }
+          }
+        }
+      }
+
+      // 5. Captive Ally Cage (guaranteed once per floor)
       if (withCage) {
         const cageSpot = this.findFreeSpot(r, tSpot.x, tSpot.y, 3.5);
         r.props.push({
@@ -582,7 +749,7 @@ export class DungeonGenerator {
         });
       }
 
-      // 4. Clutter in other sub-rooms: crates, barrels, pots
+      // 6. Clutter in other sub-rooms: crates, barrels, pots
       const clutterTypes: ('barrel' | 'pot' | 'crate')[] = ['barrel', 'pot', 'crate'];
       const extraProps = 3 + Math.floor(Math.random() * 3);
       for (let i = 0; i < extraProps; i++) {
@@ -699,6 +866,34 @@ export class DungeonGenerator {
     floor.receiveShadow = true;
     roomGroup.add(floor);
 
+    // Architectural Enhancements per Room Shape
+    if (r.shape === 'elevated_sanctuary') {
+      const daisMat = getLambert(zone.wallColor + 0x080808);
+      // Dual-tier stepped sanctuary plinth
+      const baseDais = new THREE.Mesh(GEO.box, getLambert(zone.wallColor + 0x040404));
+      baseDais.scale.set(7.4 * TILE_SIZE, 0.10, 5.4 * TILE_SIZE);
+      baseDais.position.set(DOOR_CX, 0.05, DOOR_CY);
+      baseDais.receiveShadow = true;
+
+      const upperDais = new THREE.Mesh(GEO.box, daisMat);
+      upperDais.scale.set(7 * TILE_SIZE, 0.12, 5 * TILE_SIZE);
+      upperDais.position.set(DOOR_CX, 0.15, DOOR_CY);
+      upperDais.receiveShadow = true;
+
+      const trimMat = getLambert(0xd4af37, 0x4a3c10);
+      const daisTrim = new THREE.Mesh(GEO.box, trimMat);
+      daisTrim.scale.set(7.06 * TILE_SIZE, 0.02, 5.06 * TILE_SIZE);
+      daisTrim.position.set(DOOR_CX, 0.21, DOOR_CY);
+
+      roomGroup.add(baseDais, upperDais, daisTrim);
+    } else if (r.shape === 'dragon_colosseum') {
+      const arenaRing = new THREE.Mesh(GEO.torus, getBasic(0xffd700, 0.8, true));
+      arenaRing.scale.set(7.2, 7.2, 0.08);
+      arenaRing.rotation.x = Math.PI / 2;
+      arenaRing.position.set(DOOR_CX, 0.04, DOOR_CY);
+      roomGroup.add(arenaRing);
+    }
+
     const wallMat = getLambert(zone.wallColor);
     const topMat = getLambert(zone.wallColor + 0x111111);
 
@@ -710,6 +905,11 @@ export class DungeonGenerator {
         const cz = y * TILE_SIZE + TILE_SIZE / 2;
 
         if (tileVal === 1) {
+          const isSecret = r.props.some(p => p.type === 'secret_wall' && p.tileX === x && p.tileY === y);
+          if (isSecret) {
+            // Prop model handles rendering the cracked breakable secret wall
+            continue;
+          }
           const isOuterWall = x === 0 || x === ROOM_WIDTH - 1 || y === 0;
           const isFrontWall = y === ROOM_HEIGHT - 1;
           const wallHeight = isFrontWall ? 1.0 : (isOuterWall ? 3.8 : (y >= ROOM_HEIGHT - 3 ? 1.4 : 2.4));
@@ -741,6 +941,30 @@ export class DungeonGenerator {
           cap.receiveShadow = true;
 
           roomGroup.add(pillar, cap);
+        } else if (tileVal === 4) {
+          // Deep abyss chasm / magma trench below floor level
+          const abyssColor = zone.id === 'vazark' ? 0xff4400 : (zone.id === 'morgen' ? 0x1f3d1f : 0x140a24);
+          const chasmPit = new THREE.Mesh(GEO.box, getBasic(abyssColor, 0.9, true));
+          chasmPit.scale.set(TILE_SIZE, 0.2, TILE_SIZE);
+          chasmPit.position.set(cx, -1.3, cz);
+          roomGroup.add(chasmPit);
+
+          // Railing along borders facing bridge / floor tiles
+          for (const [dy, rz] of [[-1, -TILE_SIZE / 2 + 0.08], [1, TILE_SIZE / 2 - 0.08]]) {
+            const ny = y + dy;
+            if (ny >= 0 && ny < ROOM_HEIGHT && r.tiles[ny][x] === 0) {
+              const rail = new THREE.Mesh(GEO.box, wallMat);
+              rail.scale.set(TILE_SIZE, 0.45, 0.14);
+              rail.position.set(cx, 0.22, cz + rz);
+              rail.castShadow = true;
+              roomGroup.add(rail);
+
+              const railCap = new THREE.Mesh(GEO.box, topMat);
+              railCap.scale.set(TILE_SIZE, 0.1, 0.18);
+              railCap.position.set(cx, 0.48, cz + rz);
+              roomGroup.add(railCap);
+            }
+          }
         }
       }
     }
@@ -824,10 +1048,20 @@ export class DungeonGenerator {
       roomGroup.add(torchLight);
     }
 
-    // Build 3D models for Props
+    // Build 3D models for Props with proper elevation for dais and platforms
+    const sanctuaryHalfW = (7 * TILE_SIZE) / 2;
+    const sanctuaryHalfH = (5 * TILE_SIZE) / 2;
+
     for (const p of r.props) {
-      const propVis = buildPropModel(p.type);
-      propVis.root.position.set(p.x, 0, p.y);
+      const propVis = buildPropModel(p.type, p);
+      let propY = 0;
+      if (r.shape === 'elevated_sanctuary') {
+        const onSanctuaryDais = Math.abs(p.x - DOOR_CX) <= sanctuaryHalfW && Math.abs(p.y - DOOR_CY) <= sanctuaryHalfH;
+        if (onSanctuaryDais) {
+          propY = 0.22; // Elevate prop so it sits cleanly on top of the dais without clipping!
+        }
+      }
+      propVis.root.position.set(p.x, propY, p.y);
       roomGroup.add(propVis.root);
       p.mesh = propVis.root;
     }
@@ -844,7 +1078,7 @@ export class DungeonGenerator {
       for (let tx = minTx; tx <= maxTx; tx++) {
         if (tx < 0 || ty < 0 || tx >= ROOM_WIDTH || ty >= ROOM_HEIGHT) return true;
         const val = r.tiles[ty][tx];
-        if (val === 1 || val === 2 || (val === 3 && !r.cleared)) {
+        if (val === 1 || val === 2 || val === 4 || (val === 3 && !r.cleared)) {
           return true;
         }
       }
