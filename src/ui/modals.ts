@@ -67,7 +67,7 @@ const DEFAULT_LEADERBOARD: LeaderboardEntry[] = [
     className: 'Ladro',
     subclassName: 'Assassino dei Vicoli',
     level: 6,
-    zoneName: 'Rovine di Elshiff',
+    zoneName: 'Rovine di Ealscylf',
     gold: 560,
     score: 920,
     date: '20/10/2026'
@@ -103,6 +103,10 @@ export class ModalManager {
 
   public settings: GameSettings = { ...DEFAULT_SETTINGS };
   private selectedBagIndex: number = 0;
+  private selectedEquipSlot: ItemSlot | null = null;
+  private inventoryTab: 'all' | 'weapon' | 'armor' | 'accessory' = 'all';
+  private lastBagClickTime: number = 0;
+  private lastBagClickIndex: number = -1;
   public isShopOpen = false;
   private shopInventory: Item[] = [];
   private shopInventoryZone = 0;
@@ -574,6 +578,257 @@ export class ModalManager {
     }
   }
 
+  // Helper to compute a power score for an item
+  private getItemPowerScore(item: Item): number {
+    let score = item.ilvl * 10;
+    for (const val of Object.values(item.stats)) {
+      score += (val || 0);
+    }
+    return score;
+  }
+
+  // Helper to check if an item is an upgrade over what's currently equipped
+  private isItemUpgrade(item: Item, currentEquipped: Item | undefined): boolean {
+    if (!currentEquipped) return true;
+    if (item.slot === 'weapon') {
+      const newPrimary = (item.stats.damage || 0) + (item.stats.spellPower || 0);
+      const oldPrimary = (currentEquipped.stats.damage || 0) + (currentEquipped.stats.spellPower || 0);
+      if (newPrimary !== oldPrimary) return newPrimary > oldPrimary;
+    } else if (item.slot === 'armor') {
+      const newDef = (item.stats.armor || 0) * 10 + (item.stats.maxHp || 0);
+      const oldDef = (currentEquipped.stats.armor || 0) * 10 + (currentEquipped.stats.maxHp || 0);
+      if (newDef !== oldDef) return newDef > oldDef;
+    }
+    return this.getItemPowerScore(item) > this.getItemPowerScore(currentEquipped);
+  }
+
+  // Quick equip helper
+  private equipBagIndex(player: Player, index: number): void {
+    const itemToEquip = player.bag[index];
+    if (itemToEquip) {
+      const oldEquip = player.equip[itemToEquip.slot];
+      player.equip[itemToEquip.slot] = itemToEquip;
+      player.bag.splice(index, 1);
+      if (oldEquip) player.bag.push(oldEquip);
+
+      player.recalculateStats();
+      sound.chestOpen();
+      this.selectedBagIndex = Math.min(index, Math.max(0, player.bag.length - 1));
+      this.selectedEquipSlot = null;
+      this.showInventory(player);
+    }
+  }
+
+  // Unequip helper
+  private unequipSlot(player: Player, slot: ItemSlot): void {
+    const item = player.equip[slot];
+    if (item) {
+      if (player.bag.length >= 24) {
+        sound.playerHurt();
+        return;
+      }
+      delete player.equip[slot];
+      player.bag.push(item);
+      player.recalculateStats();
+      sound.coin();
+      this.selectedEquipSlot = null;
+      this.selectedBagIndex = player.bag.length - 1;
+      this.showInventory(player);
+    }
+  }
+
+  // Render the Inspection & Comparison Card HTML
+  private renderInspectHtml(player: Player): string {
+    const slotNames: Record<string, string> = {
+      weapon: 'Arma Principale',
+      armor: 'Corazza / Tunica',
+      helm: 'Elmo / Diadema',
+      ring: 'Anello della Trama',
+      relic: 'Reliquia Sacra'
+    };
+
+    // Case 1: An equipped item is selected on the paperdoll
+    if (this.selectedEquipSlot && player.equip[this.selectedEquipSlot]) {
+      const item = player.equip[this.selectedEquipSlot]!;
+      const rar = RARITIES[item.rarity];
+      const statsHtml = Object.entries(item.stats)
+        .map(([k, v]) => `<div class="inspect-stat-row"><span class="stat-name">${STAT_LABELS_IT[k as keyof CharacterStats] || k}:</span> <b class="stat-value">+${v}</b></div>`)
+        .join('');
+
+      return `
+        <div class="inspect-card equipped-mode" style="--rar-color:${rar.color};">
+          <div class="inspect-card-header">
+            <div class="inspect-icon-wrap" style="border-color:${rar.color};">
+              <span class="inspect-icon">${item.icon || '🛡️'}</span>
+            </div>
+            <div class="inspect-header-info">
+              <div class="inspect-title" style="color:${rar.color};">${item.name}</div>
+              <div class="inspect-subtitle">[${rar.name}] · ${slotNames[item.slot]} · Livello ${item.ilvl}</div>
+            </div>
+            <span class="inspect-badge-equipped">INDOSSATO</span>
+          </div>
+
+          <div class="inspect-card-body">
+            <div class="inspect-col full-width">
+              <div class="inspect-section-label">STATISTICHE ATTUALI:</div>
+              <div class="inspect-stats-list">${statsHtml}</div>
+              <div class="inspect-sell-gold">💰 Valore di vendita: <b>+${item.goldValue} Oro</b></div>
+            </div>
+          </div>
+
+          <div class="inspect-card-actions">
+            <button id="btn-inspect-unequip" class="btn-inspect-action danger" data-slot="${item.slot}">
+              ✕ Rimuovi e Riponi nello Zaino
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Case 2: A bag item is selected
+    const selectedItem: Item | undefined = player.bag[this.selectedBagIndex];
+    if (selectedItem) {
+      const currentEquipped = player.equip[selectedItem.slot];
+      const selRar = RARITIES[selectedItem.rarity];
+      const isUpgrade = this.isItemUpgrade(selectedItem, currentEquipped);
+
+      const allStatKeys = new Set([
+        ...Object.keys(selectedItem.stats),
+        ...(currentEquipped ? Object.keys(currentEquipped.stats) : [])
+      ]) as Set<keyof CharacterStats>;
+
+      const deltasHtml = Array.from(allStatKeys).map(statKey => {
+        const newVal = Math.round((selectedItem.stats[statKey] || 0) * 10) / 10;
+        const oldVal = Math.round((currentEquipped ? (currentEquipped.stats[statKey] || 0) : 0) * 10) / 10;
+        const diff = Math.round((newVal - oldVal) * 10) / 10;
+        const label = STAT_LABELS_IT[statKey] || statKey;
+
+        if (diff > 0) {
+          return `<div class="delta-badge positive"><span>${label}:</span> <b>+${diff} ▲</b></div>`;
+        } else if (diff < 0) {
+          return `<div class="delta-badge negative"><span>${label}:</span> <b>${diff} ▼</b></div>`;
+        } else {
+          return `<div class="delta-badge neutral"><span>${label}:</span> <b>=${newVal}</b></div>`;
+        }
+      }).join('');
+
+      const itemStatsHtml = Object.entries(selectedItem.stats)
+        .map(([k, v]) => `<div class="inspect-stat-row"><span class="stat-name">${STAT_LABELS_IT[k as keyof CharacterStats] || k}:</span> <b class="stat-value">+${v}</b></div>`)
+        .join('');
+
+      return `
+        <div class="inspect-card ${isUpgrade ? 'card-upgrade' : ''}" style="--rar-color:${selRar.color};">
+          <div class="inspect-card-header">
+            <div class="inspect-icon-wrap" style="border-color:${selRar.color};">
+              <span class="inspect-icon">${selectedItem.icon || '📦'}</span>
+            </div>
+            <div class="inspect-header-info">
+              <div class="inspect-title" style="color:${selRar.color};">${selectedItem.name}</div>
+              <div class="inspect-subtitle">[${selRar.name}] · ${slotNames[selectedItem.slot]} · Livello ${selectedItem.ilvl}</div>
+            </div>
+            ${isUpgrade ? '<span class="inspect-badge-upgrade">✨ MIGLIORAMENTO</span>' : ''}
+          </div>
+
+          <div class="inspect-card-body">
+            <div class="inspect-columns">
+              <div class="inspect-col">
+                <div class="inspect-section-label">STATISTICHE OGGETTO:</div>
+                <div class="inspect-stats-list">${itemStatsHtml}</div>
+                <div class="inspect-sell-gold">💰 Valore vendita: <b>+${selectedItem.goldValue} Oro</b></div>
+              </div>
+
+              <div class="inspect-col">
+                <div class="inspect-section-label">VARIAZIONE VS INDOSSATO:</div>
+                <div class="inspect-deltas-grid">${deltasHtml}</div>
+                ${currentEquipped ? `<div class="inspect-vs-text">Confrontato con: <i>${currentEquipped.name}</i></div>` : '<div class="inspect-vs-text">Nessun oggetto attualmente in questo slot</div>'}
+              </div>
+            </div>
+          </div>
+
+          <div class="inspect-card-actions">
+            <button id="btn-inspect-equip" class="btn-inspect-action primary" data-bag-index="${this.selectedBagIndex}">
+              ⚔️ Equipaggia Oggetto
+            </button>
+            <button id="btn-inspect-scrap" class="btn-inspect-action danger" data-bag-index="${this.selectedBagIndex}">
+              💰 Smonta (+${selectedItem.goldValue} Oro)
+            </button>
+          </div>
+          <div class="inspect-card-hint">💡 Clicca 2 volte, usa il tasto ⚡ o clic destro sulla tessera per equipaggiare all'istante</div>
+        </div>
+      `;
+    }
+
+    // Case 3: Empty bag / no selection
+    return `
+      <div class="inspect-card empty-mode">
+        <div class="inspect-empty-notice">
+          <span class="empty-icon">🎒</span>
+          <div class="empty-title">Nessun oggetto selezionato</div>
+          <p class="empty-desc">Clicca su un oggetto nello zaino o su un pezzo indossato per visualizzarne dettagli e statistiche.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  // Bind actions inside the inspection card
+  private bindInspectEvents(player: Player): void {
+    document.getElementById('btn-inspect-equip')?.addEventListener('click', (e) => {
+      const idx = Number((e.currentTarget as HTMLElement).dataset.bagIndex);
+      this.equipBagIndex(player, idx);
+    });
+
+    document.getElementById('btn-inspect-scrap')?.addEventListener('click', (e) => {
+      const idx = Number((e.currentTarget as HTMLElement).dataset.bagIndex);
+      const itemToScrap = player.bag[idx];
+      if (itemToScrap) {
+        player.gold += itemToScrap.goldValue;
+        player.bag.splice(idx, 1);
+        sound.coin();
+        this.selectedBagIndex = Math.max(0, this.selectedBagIndex - 1);
+        this.showInventory(player);
+      }
+    });
+
+    document.getElementById('btn-inspect-unequip')?.addEventListener('click', (e) => {
+      const slot = (e.currentTarget as HTMLElement).dataset.slot as ItemSlot;
+      if (slot) {
+        this.unequipSlot(player, slot);
+      }
+    });
+  }
+
+  // Update selection without full re-render
+  private updateSelectionAndInspect(player: Player): void {
+    if (!this.inventoryPanel) return;
+
+    // 1. Update selection on bag tiles
+    this.inventoryPanel.querySelectorAll('.bp-slot-tile').forEach(t => {
+      const idx = Number((t as HTMLElement).dataset.bagIndex);
+      if (this.selectedEquipSlot === null && idx === this.selectedBagIndex) {
+        t.classList.add('selected');
+      } else {
+        t.classList.remove('selected');
+      }
+    });
+
+    // 2. Update selection on paperdoll slots
+    this.inventoryPanel.querySelectorAll('.pd-slot-box').forEach(s => {
+      const sl = (s as HTMLElement).dataset.slot;
+      if (this.selectedEquipSlot === sl) {
+        s.classList.add('selected');
+      } else {
+        s.classList.remove('selected');
+      }
+    });
+
+    // 3. Render ONLY the inspect panel
+    const inspectPanel = document.getElementById('inv-inspect-panel');
+    if (inspectPanel) {
+      inspectPanel.innerHTML = this.renderInspectHtml(player);
+      this.bindInspectEvents(player);
+    }
+  }
+
   // --- 3. Modern User-Friendly Inventory & Paperdoll Sheet ---
   public showInventory(player: Player): void {
     this.hideAll();
@@ -582,162 +837,137 @@ export class ModalManager {
     this.overlay.classList.add('active');
     this.inventoryPanel.style.display = 'flex';
 
-    if (this.selectedBagIndex >= player.bag.length) {
-      this.selectedBagIndex = Math.max(0, player.bag.length - 1);
-    }
-
-    const slots: ('weapon' | 'armor' | 'helm' | 'ring' | 'relic')[] = ['weapon', 'armor', 'helm', 'ring', 'relic'];
-    const slotNames: Record<string, string> = {
+    const slotNames: Record<ItemSlot, string> = {
       weapon: 'Arma Principale',
       armor: 'Corazza / Tunica',
       helm: 'Elmo / Diadema',
       ring: 'Anello della Trama',
       relic: 'Reliquia Sacra'
     };
-    const slotIcons: Record<string, string> = {
+    const slotShortNames: Record<ItemSlot, string> = {
+      weapon: 'Arma',
+      armor: 'Corazza',
+      helm: 'Elmo',
+      ring: 'Anello',
+      relic: 'Reliquia'
+    };
+    const slotIcons: Record<ItemSlot, string> = {
       weapon: '🗡️',
       armor: '🛡️',
       helm: '🪖',
       ring: '💍',
       relic: '📜'
     };
+    const classIcons: Record<ClassId, string> = {
+      paladin: '🛡️',
+      wizard: '🔮',
+      rogue: '🗡️',
+      fighter: '⚔️',
+      cleric: '✨'
+    };
 
-    // Paperdoll 5 equipment slots HTML
-    const equipHtml = slots.map(s => {
+    // Helper to render an anatomical paperdoll slot
+    const renderPaperdollSlot = (s: ItemSlot) => {
       const item = player.equip[s];
+      const isSelected = this.selectedEquipSlot === s;
       if (!item) {
         return `
-          <div class="equip-slot empty">
-            <div class="equip-slot-icon">${slotIcons[s]}</div>
-            <div class="equip-slot-info">
-              <span class="slot-type">${slotNames[s]}</span>
-              <span class="slot-empty-text">Slot Vuoto</span>
-            </div>
+          <div class="pd-slot-box empty ${isSelected ? 'selected' : ''}" data-slot="${s}" title="Slot ${slotNames[s]} (Vuoto)">
+            <span class="pd-slot-ghost-icon">${slotIcons[s]}</span>
+            <span class="pd-slot-tag">${slotShortNames[s]}</span>
           </div>
         `;
       }
       const rar = RARITIES[item.rarity];
-      const statsList = Object.entries(item.stats)
-        .map(([k, v]) => `+${v} ${STAT_LABELS_IT[k as keyof CharacterStats] || k}`)
-        .join(' · ');
-
       return `
-        <div class="equip-slot occupied" style="--rar-color:${rar.color}">
-          <div class="equip-slot-icon">${item.icon || slotIcons[s]}</div>
-          <div class="equip-slot-info">
-            <div class="slot-header-row">
-              <span class="slot-type">${slotNames[s]}</span>
-              <span class="badge-rarity" style="color:${rar.color}">[${rar.name}]</span>
-            </div>
-            <div class="slot-item-name" style="color:${rar.color}">${item.name}</div>
-            <div class="slot-stats-text">${statsList}</div>
-          </div>
+        <div class="pd-slot-box occupied ${isSelected ? 'selected' : ''}" data-slot="${s}" style="--rar-color:${rar.color};" title="${item.name} (${rar.name} Liv. ${item.ilvl})">
+          <span class="pd-slot-icon">${item.icon || slotIcons[s]}</span>
+          <span class="pd-slot-ilvl">L.${item.ilvl}</span>
+          <span class="pd-slot-tag">${slotShortNames[s]}</span>
+          <button class="pd-unequip-btn" data-slot="${s}" title="Togli e metti nello zaino">✕</button>
         </div>
       `;
-    }).join('');
+    };
 
-    // Bag items grid HTML
-    const bagHtml = player.bag.length === 0
-      ? '<div class="empty-bag-notice"><p>🎒 Lo zaino è vuoto. Distruggi casse e sconfiggi mostri per raccogliere equipaggiamenti!</p></div>'
-      : `<div class="bag-slots-grid">
-          ${player.bag.map((item, i) => {
-            const rar = RARITIES[item.rarity];
-            const isSelected = i === this.selectedBagIndex;
-            return `
-              <div class="bag-slot-card ${isSelected ? 'selected' : ''}" data-bag-index="${i}" style="--rar-color:${rar.color}">
-                <div class="bag-card-top">
-                  <span class="bag-item-icon">${item.icon || '📦'}</span>
-                  <span class="bag-item-rarity-pill" style="color:${rar.color}">${rar.name}</span>
-                </div>
-                <div class="bag-card-name" style="color:${rar.color}">${item.name}</div>
-                <div class="bag-card-ilvl">Livello ${item.ilvl} · ${slotNames[item.slot]}</div>
-              </div>
-            `;
-          }).join('')}
-        </div>`;
+    // Categorized Filtering for Bag
+    const filteredBag = player.bag
+      .map((item, originalIndex) => ({ item, originalIndex }))
+      .filter(({ item }) => {
+        if (this.inventoryTab === 'all') return true;
+        if (this.inventoryTab === 'weapon') return item.slot === 'weapon';
+        if (this.inventoryTab === 'armor') return item.slot === 'armor';
+        if (this.inventoryTab === 'accessory') return item.slot === 'helm' || item.slot === 'ring' || item.slot === 'relic';
+        return true;
+      });
 
-    // Item Comparison Preview Box
-    const selectedItem: Item | undefined = player.bag[this.selectedBagIndex];
-    let comparisonHtml = '';
+    // Counts by category
+    const countAll = player.bag.length;
+    const countWeapon = player.bag.filter(it => it.slot === 'weapon').length;
+    const countArmor = player.bag.filter(it => it.slot === 'armor').length;
+    const countAccessory = player.bag.filter(it => it.slot === 'helm' || it.slot === 'ring' || it.slot === 'relic').length;
 
-    if (selectedItem) {
-      const currentEquipped = player.equip[selectedItem.slot];
-      const selRar = RARITIES[selectedItem.rarity];
+    // Common items scrap calculation
+    let commonGoldSum = 0;
+    let commonCount = 0;
+    player.bag.forEach(it => {
+      if (it.rarity === 'common') {
+        commonGoldSum += it.goldValue;
+        commonCount++;
+      }
+    });
 
-      // Compute stat differences
-      const allStatKeys = new Set([
-        ...Object.keys(selectedItem.stats),
-        ...(currentEquipped ? Object.keys(currentEquipped.stats) : [])
-      ]) as Set<keyof CharacterStats>;
-
-      const deltasHtml = Array.from(allStatKeys).map(statKey => {
-        const newVal = selectedItem.stats[statKey] || 0;
-        const oldVal = currentEquipped ? (currentEquipped.stats[statKey] || 0) : 0;
-        const diff = Math.round((newVal - oldVal) * 10) / 10;
-        const label = STAT_LABELS_IT[statKey] || statKey;
-
-        if (diff > 0) {
-          return `<div class="delta-row positive"><span>${label}:</span> <b>+${diff} ▲</b></div>`;
-        } else if (diff < 0) {
-          return `<div class="delta-row negative"><span>${label}:</span> <b>${diff} ▼</b></div>`;
-        } else {
-          return `<div class="delta-row neutral"><span>${label}:</span> <b>=${newVal}</b></div>`;
-        }
-      }).join('');
-
-      comparisonHtml = `
-        <div class="item-comparison-card" style="--rar-color:${selRar.color}">
-          <div class="comparison-header">
-            <h4>CONFRONTO EQUIPAGGIAMENTO</h4>
-            <span class="badge-slot">${slotNames[selectedItem.slot]}</span>
-          </div>
-
-          <div class="comparison-split">
-            <div class="compare-side compare-new">
-              <span class="compare-label">OGGETTO NELLO ZAINO</span>
-              <div class="compare-item-title" style="color:${selRar.color}">${selectedItem.name}</div>
-              <span class="compare-rarity">[${selRar.name}] · Livello ${selectedItem.ilvl}</span>
-              <div class="compare-stats-block">
-                ${Object.entries(selectedItem.stats).map(([k, v]) => `<div>+${v} ${STAT_LABELS_IT[k as keyof CharacterStats] || k}</div>`).join('')}
-              </div>
-            </div>
-
-            <div class="compare-side compare-current">
-              <span class="compare-label">ATTUALMENTE INDOSSATO</span>
-              ${currentEquipped ? `
-                <div class="compare-item-title" style="color:${RARITIES[currentEquipped.rarity].color}">${currentEquipped.name}</div>
-                <span class="compare-rarity">[${RARITIES[currentEquipped.rarity].name}] · Livello ${currentEquipped.ilvl}</span>
-                <div class="compare-stats-block">
-                  ${Object.entries(currentEquipped.stats).map(([k, v]) => `<div>+${v} ${STAT_LABELS_IT[k as keyof CharacterStats] || k}</div>`).join('')}
-                </div>
-              ` : `
-                <div class="compare-item-title muted">Nessuno (Slot Vuoto)</div>
-                <p class="muted-note">Equipaggiare questo oggetto aggiungerà tutte le sue statistiche.</p>
-              `}
-            </div>
-          </div>
-
-          <div class="comparison-deltas">
-            <div class="deltas-title">Variazione Statistiche se Equipaggiato:</div>
-            <div class="deltas-grid">${deltasHtml}</div>
-          </div>
-
-          <div class="comparison-actions">
-            <button id="btn-equip-selected" class="btn-inv-action primary">⚔️ Equipaggia Ora</button>
-            <button id="btn-scrap-selected" class="btn-inv-action danger">💰 Smonta per +${selectedItem.goldValue} Oro</button>
-          </div>
-        </div>
-      `;
+    // Validate selectedBagIndex
+    if (filteredBag.length > 0) {
+      const existsInFilter = filteredBag.some(f => f.originalIndex === this.selectedBagIndex);
+      if (!existsInFilter && this.selectedEquipSlot === null) {
+        this.selectedBagIndex = filteredBag[0].originalIndex;
+      }
+    } else {
+      if (this.selectedEquipSlot === null) {
+        this.selectedBagIndex = -1;
+      }
     }
 
+    // Build RPG Backpack Grid (render items + empty socket tiles up to 20 or more)
+    const totalDisplaySlots = Math.max(20, Math.ceil(filteredBag.length / 4) * 4);
+    let bagTilesHtml = '';
+    for (let slotIdx = 0; slotIdx < totalDisplaySlots; slotIdx++) {
+      if (slotIdx < filteredBag.length) {
+        const { item, originalIndex } = filteredBag[slotIdx];
+        const rar = RARITIES[item.rarity];
+        const isSelected = (this.selectedEquipSlot === null && originalIndex === this.selectedBagIndex);
+        const isUpgrade = this.isItemUpgrade(item, player.equip[item.slot]);
+
+        bagTilesHtml += `
+          <div class="bp-slot-tile occupied ${isSelected ? 'selected' : ''} ${isUpgrade ? 'is-upgrade' : ''}"
+               data-bag-index="${originalIndex}"
+               style="--rar-color:${rar.color};"
+               title="${item.name} · ${rar.name} Liv. ${item.ilvl} · Clic: Dettagli · Doppio Clic: Equipaggia">
+            <div class="bp-tile-icon">${item.icon || '📦'}</div>
+            <div class="bp-tile-ilvl">L.${item.ilvl}</div>
+            ${isUpgrade ? '<div class="bp-tile-upgrade-arrow" title="Miglioramento per il tuo equipaggiamento!">▲</div>' : ''}
+            <div class="bp-tile-slot-name">${slotShortNames[item.slot]}</div>
+            <button class="bp-quick-equip-btn" data-bag-index="${originalIndex}" title="Equipaggia subito">⚡</button>
+          </div>
+        `;
+      } else {
+        bagTilesHtml += `
+          <div class="bp-slot-tile empty" title="Slot Zaino Vuoto">
+            <span class="bp-empty-dot">·</span>
+          </div>
+        `;
+      }
+    }
+
+    // Render full inventory modal layout
     this.inventoryPanel.innerHTML = `
       <div class="inventory-modern-layout">
         <!-- TOP STATUS BAR -->
         <div class="inv-top-bar">
           <div class="inv-hero-identity">
-            <span class="inv-hero-avatar">🛡️</span>
-            <div>
-              <div class="inv-hero-name">${player.subclass.name} <span class="inv-hero-lvl">Liv. ${player.level}</span></div>
+            <div class="inv-hero-avatar-ring">🛡️</div>
+            <div class="inv-hero-titles">
+              <div class="inv-hero-name">${player.subclass.name} <span class="inv-hero-lvl-badge">Liv. ${player.level}</span></div>
               <div class="inv-hero-class">${player.classId.toUpperCase()} · Eroe dei Renegades</div>
             </div>
           </div>
@@ -751,45 +981,153 @@ export class ModalManager {
           </div>
         </div>
 
-        <!-- TWO BALANCED MAIN COLUMNS -->
-        <div class="inv-two-columns">
-          <!-- LEFT COLUMN: PAPERDOLL + STATS -->
-          <div class="inv-left-pane">
-            <div class="inv-section-title">
-              <h3>⚔️ Equipaggiamento Indossato</h3>
-            </div>
-            <div class="paperdoll-list">${equipHtml}</div>
+        <!-- MAIN 2-COLUMN STAGE -->
+        <div class="inv-main-stage">
 
-            <div class="inv-section-title" style="margin-top:16px">
-              <h3>📊 Statistiche Totali dell’Eroe</h3>
+          <!-- LEFT COLUMN: ANATOMICAL HERO PAPERDOLL + STATS BOARD -->
+          <div class="inv-hero-column">
+            <div class="paperdoll-showcase">
+              <div class="paperdoll-title-bar">
+                <span>🛡️ EQUIPAGGIAMENTO INDOSSATO</span>
+                <span class="paperdoll-hint">Clicca un pezzo per ispezionarlo</span>
+              </div>
+
+              <div class="paperdoll-stage">
+                <!-- Center Hero Crest & Title -->
+                <div class="pd-hero-center">
+                  <div class="pd-hero-ring">
+                    <span class="pd-hero-icon">${classIcons[player.classId] || '🛡️'}</span>
+                  </div>
+                  <div class="pd-hero-label">${player.subclass.name}</div>
+                  <div class="pd-hero-sub">${player.classId.toUpperCase()}</div>
+                </div>
+
+                <!-- Anatomical 5 Gear Slots -->
+                <div class="pd-slot-pos pd-pos-helm">
+                  ${renderPaperdollSlot('helm')}
+                </div>
+                <div class="pd-slot-pos pd-pos-weapon">
+                  ${renderPaperdollSlot('weapon')}
+                </div>
+                <div class="pd-slot-pos pd-pos-armor">
+                  ${renderPaperdollSlot('armor')}
+                </div>
+                <div class="pd-slot-pos pd-pos-relic">
+                  ${renderPaperdollSlot('relic')}
+                </div>
+                <div class="pd-slot-pos pd-pos-ring">
+                  ${renderPaperdollSlot('ring')}
+                </div>
+              </div>
             </div>
-            <div class="stats-overview-grid">
-              <div class="stat-pill"><span class="stat-lbl">Salute:</span> <b class="stat-val hp">${Math.round(player.hp)} / ${player.maxHp}</b></div>
-              <div class="stat-pill"><span class="stat-lbl">Danno Attacco:</span> <b class="stat-val">${player.stats.damage.toFixed(1)}</b></div>
-              <div class="stat-pill"><span class="stat-lbl">Armatura:</span> <b class="stat-val">${player.stats.armor}</b></div>
-              <div class="stat-pill"><span class="stat-lbl">Velocità:</span> <b class="stat-val">${player.stats.speed.toFixed(1)}</b></div>
-              <div class="stat-pill"><span class="stat-lbl">Prob. Critico:</span> <b class="stat-val">${player.stats.critChance}%</b></div>
-              <div class="stat-pill"><span class="stat-lbl">Danno Critico:</span> <b class="stat-val">x${player.stats.critDamage.toFixed(1)}</b></div>
-              <div class="stat-pill"><span class="stat-lbl">Rigenerazione:</span> <b class="stat-val">${player.stats.hpRegen.toFixed(1)}/s</b></div>
-              <div class="stat-pill"><span class="stat-lbl">Vampirismo:</span> <b class="stat-val">${player.stats.lifesteal}%</b></div>
-              <div class="stat-pill"><span class="stat-lbl">Potere Magico:</span> <b class="stat-val">${player.stats.spellPower}</b></div>
-              <div class="stat-pill"><span class="stat-lbl">Riduz. Ricarica:</span> <b class="stat-val">${player.stats.cooldownReduction}%</b></div>
+
+            <!-- HERO STATS CARD -->
+            <div class="hero-stats-card">
+              <div class="stats-card-header">📊 ATTRIBUTI TOTALI DELL’EROE</div>
+              <div class="stats-board-grid">
+                <div class="stat-badge hp" title="Punti Vita Attuali / Massimi">
+                  <span class="stat-ico">💖</span>
+                  <span class="stat-name">Salute</span>
+                  <span class="stat-num">${Math.round(player.hp)} / ${player.maxHp}</span>
+                </div>
+                <div class="stat-badge dmg" title="Danno Base per Colpo">
+                  <span class="stat-ico">⚔️</span>
+                  <span class="stat-name">Attacco</span>
+                  <span class="stat-num">${player.stats.damage % 1 === 0 ? player.stats.damage : player.stats.damage.toFixed(1)}</span>
+                </div>
+                <div class="stat-badge arm" title="Riduzione Danno Fisico">
+                  <span class="stat-ico">🛡️</span>
+                  <span class="stat-name">Armatura</span>
+                  <span class="stat-num">${player.stats.armor}</span>
+                </div>
+                <div class="stat-badge spd" title="Velocità di Movimento">
+                  <span class="stat-ico">⚡</span>
+                  <span class="stat-name">Velocità</span>
+                  <span class="stat-num">${player.stats.speed.toFixed(1)}</span>
+                </div>
+                <div class="stat-badge crit" title="Probabilità di Colpo Critico">
+                  <span class="stat-ico">🎯</span>
+                  <span class="stat-name">Critico</span>
+                  <span class="stat-num">${player.stats.critChance}%</span>
+                </div>
+                <div class="stat-badge cdmg" title="Moltiplicatore Danno Critico">
+                  <span class="stat-ico">💥</span>
+                  <span class="stat-name">Danno Crit.</span>
+                  <span class="stat-num">x${player.stats.critDamage.toFixed(1)}</span>
+                </div>
+                <div class="stat-badge rgn" title="Rigenerazione Vita al Secondo">
+                  <span class="stat-ico">🌿</span>
+                  <span class="stat-name">Rigeneraz.</span>
+                  <span class="stat-num">+${player.stats.hpRegen.toFixed(1)}/s</span>
+                </div>
+                <div class="stat-badge ls" title="Percentuale Danno Convertito in Vita">
+                  <span class="stat-ico">🩸</span>
+                  <span class="stat-name">Vampirismo</span>
+                  <span class="stat-num">${player.stats.lifesteal}%</span>
+                </div>
+                <div class="stat-badge sp" title="Potenza Magica e Scalare Abilità">
+                  <span class="stat-ico">✨</span>
+                  <span class="stat-name">Magia</span>
+                  <span class="stat-num">${player.stats.spellPower}</span>
+                </div>
+                <div class="stat-badge cdr" title="Riduzione Tempo di Recupero">
+                  <span class="stat-ico">⏳</span>
+                  <span class="stat-name">CDR</span>
+                  <span class="stat-num">${player.stats.cooldownReduction}%</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- RIGHT COLUMN: BAG & COMPARISON -->
-          <div class="inv-right-pane">
-            <div class="inv-section-title">
-              <h3>🎒 Zaino (${player.bag.length} oggetti)</h3>
+          <!-- RIGHT COLUMN: BACKPACK TILES & INSPECT / COMPARISON PANEL -->
+          <div class="inv-backpack-column">
+            <!-- Backpack Toolbar & Categories -->
+            <div class="backpack-header-bar">
+              <div class="backpack-title-row">
+                <div class="bp-title">🎒 ZAINO <span class="bp-capacity">(${player.bag.length} / 24)</span></div>
+                <div class="bp-bulk-actions">
+                  <button id="btn-auto-equip-best" class="btn-bp-action primary" title="Equipaggia automaticamente i pezzi migliori">
+                    ⚡ Equipaggia Migliori
+                  </button>
+                  <button id="btn-scrap-commons" class="btn-bp-action danger ${commonCount === 0 ? 'disabled' : ''}" title="Smonta tutti gli oggetti Comuni per ottenere Oro">
+                    💰 Smonta Comuni ${commonCount > 0 ? `(+${commonGoldSum})` : ''}
+                  </button>
+                </div>
+              </div>
+
+              <div class="bp-category-tabs">
+                <button class="bp-tab-btn ${this.inventoryTab === 'all' ? 'active' : ''}" data-inv-tab="all">
+                  🎒 Tutti (${countAll})
+                </button>
+                <button class="bp-tab-btn ${this.inventoryTab === 'weapon' ? 'active' : ''}" data-inv-tab="weapon">
+                  ⚔️ Armi (${countWeapon})
+                </button>
+                <button class="bp-tab-btn ${this.inventoryTab === 'armor' ? 'active' : ''}" data-inv-tab="armor">
+                  🛡️ Armature (${countArmor})
+                </button>
+                <button class="bp-tab-btn ${this.inventoryTab === 'accessory' ? 'active' : ''}" data-inv-tab="accessory">
+                  💍 Accessori (${countAccessory})
+                </button>
+              </div>
             </div>
-            ${bagHtml}
-            ${comparisonHtml}
+
+            <!-- RPG Inventory Slots Grid -->
+            <div class="backpack-grid-container" id="backpack-grid-container">
+              ${bagTilesHtml}
+            </div>
+
+            <!-- Bottom Inspect & Comparison Card -->
+            <div id="inv-inspect-panel" class="inv-inspect-panel">
+              ${this.renderInspectHtml(player)}
+            </div>
           </div>
         </div>
       </div>
     `;
 
-    // Event listeners
+    // --- EVENT LISTENERS ---
+
+    // Close button
     document.getElementById('btn-close-inv')?.addEventListener('click', () => {
       this.close();
       if (this.onResumeGame) this.onResumeGame();
@@ -803,41 +1141,125 @@ export class ModalManager {
       }
     });
 
-    // Select bag item
-    this.inventoryPanel.querySelectorAll('.bag-slot-card').forEach(card => {
-      card.addEventListener('click', (e) => {
-        const idx = Number((e.currentTarget as HTMLElement).dataset.bagIndex);
-        this.selectedBagIndex = idx;
-        sound.coin();
-        this.showInventory(player);
+    // Category Tabs click
+    this.inventoryPanel.querySelectorAll('.bp-tab-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const tab = (e.currentTarget as HTMLElement).dataset.invTab as 'all' | 'weapon' | 'armor' | 'accessory';
+        if (tab) {
+          this.inventoryTab = tab;
+          sound.coin();
+          this.showInventory(player);
+        }
       });
     });
 
-    // Equip selected item
-    document.getElementById('btn-equip-selected')?.addEventListener('click', () => {
-      const itemToEquip = player.bag[this.selectedBagIndex];
-      if (itemToEquip) {
-        const oldEquip = player.equip[itemToEquip.slot];
-        player.equip[itemToEquip.slot] = itemToEquip;
-        player.bag.splice(this.selectedBagIndex, 1);
-        if (oldEquip) player.bag.push(oldEquip);
+    // Auto-Equip Best items
+    document.getElementById('btn-auto-equip-best')?.addEventListener('click', () => {
+      let equippedCount = 0;
+      const slotsList: ItemSlot[] = ['weapon', 'armor', 'helm', 'ring', 'relic'];
+      for (const s of slotsList) {
+        const candidates = player.bag
+          .map((item, index) => ({ item, index }))
+          .filter(({ item }) => item.slot === s && this.isItemUpgrade(item, player.equip[s]));
 
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => this.getItemPowerScore(b.item) - this.getItemPowerScore(a.item));
+          const best = candidates[0];
+          const oldEquip = player.equip[s];
+          player.equip[s] = best.item;
+          player.bag.splice(best.index, 1);
+          if (oldEquip) player.bag.push(oldEquip);
+          equippedCount++;
+        }
+      }
+      if (equippedCount > 0) {
         player.recalculateStats();
         sound.chestOpen();
         this.showInventory(player);
       }
     });
 
-    // Scrap selected item for gold
-    document.getElementById('btn-scrap-selected')?.addEventListener('click', () => {
-      const itemToScrap = player.bag[this.selectedBagIndex];
-      if (itemToScrap) {
-        player.gold += itemToScrap.goldValue;
-        player.bag.splice(this.selectedBagIndex, 1);
+    // Scrap all common items
+    document.getElementById('btn-scrap-commons')?.addEventListener('click', () => {
+      if (commonCount > 0) {
+        player.bag = player.bag.filter(item => item.rarity !== 'common');
+        player.gold += commonGoldSum;
         sound.coin();
+        this.selectedBagIndex = 0;
         this.showInventory(player);
       }
     });
+
+    // Paperdoll Slots click & unequip
+    this.inventoryPanel.querySelectorAll('.pd-slot-box').forEach(box => {
+      box.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        const s = (box as HTMLElement).dataset.slot as ItemSlot;
+        // Direct unequip button clicked:
+        if (target.closest('.pd-unequip-btn')) {
+          e.stopPropagation();
+          if (s) this.unequipSlot(player, s);
+          return;
+        }
+
+        // Slot clicked: inspect currently equipped item
+        if (s && player.equip[s]) {
+          this.selectedEquipSlot = s;
+          sound.coin();
+          this.updateSelectionAndInspect(player);
+        }
+      });
+    });
+
+    // Backpack Slot Tiles Click, Double-Click, ContextMenu (Right-Click)
+    this.inventoryPanel.querySelectorAll('.bp-slot-tile.occupied').forEach(tile => {
+      tile.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        const idx = Number((tile as HTMLElement).dataset.bagIndex);
+
+        // 1. Quick-equip button on tile
+        if (target.closest('.bp-quick-equip-btn')) {
+          e.stopPropagation();
+          this.equipBagIndex(player, idx);
+          return;
+        }
+
+        // 2. Timestamp-based double-click detection (100% reliable across all browsers)
+        const now = Date.now();
+        if (this.lastBagClickIndex === idx && (now - this.lastBagClickTime) < 400) {
+          this.lastBagClickTime = 0;
+          this.lastBagClickIndex = -1;
+          this.equipBagIndex(player, idx);
+          return;
+        }
+
+        this.lastBagClickTime = now;
+        this.lastBagClickIndex = idx;
+
+        // 3. Single click: update selection and inspect card without destroying the DOM!
+        this.selectedBagIndex = idx;
+        this.selectedEquipSlot = null;
+        sound.coin();
+        this.updateSelectionAndInspect(player);
+      });
+
+      // Native double-click event listener
+      tile.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        const idx = Number((tile as HTMLElement).dataset.bagIndex);
+        this.equipBagIndex(player, idx);
+      });
+
+      // Right-click contextmenu event to equip (PC RPG Standard)
+      tile.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const idx = Number((tile as HTMLElement).dataset.bagIndex);
+        this.equipBagIndex(player, idx);
+      });
+    });
+
+    // Bind initial inspect card actions
+    this.bindInspectEvents(player);
   }
 
   // --- 4. Messages Dialog (Death / Victory / Pause) ---

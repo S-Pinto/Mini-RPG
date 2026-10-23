@@ -18,14 +18,43 @@ export const GEO = {
 
 const MAT_CACHE = new Map<string, THREE.Material>();
 
-export function getLambert(color: number, emissive: number = 0x000000): THREE.MeshLambertMaterial {
-  const key = `lam_${color}_${emissive}`;
-  let m = MAT_CACHE.get(key) as THREE.MeshLambertMaterial;
+export function getLambert(color: number, emissive: number = 0x000000): THREE.MeshStandardMaterial {
+  const key = `std_${color}_${emissive}`;
+  let m = MAT_CACHE.get(key) as THREE.MeshStandardMaterial;
   if (!m) {
-    m = new THREE.MeshLambertMaterial({ color, emissive });
+    m = new THREE.MeshStandardMaterial({
+      color,
+      emissive,
+      roughness: 0.62,
+      metalness: 0.25
+    });
     MAT_CACHE.set(key, m);
   }
   return m;
+}
+
+export function getStandard(color: number, roughness = 0.5, metalness = 0.35, emissive = 0x000000): THREE.MeshStandardMaterial {
+  const key = `std_custom_${color}_${roughness}_${metalness}_${emissive}`;
+  let m = MAT_CACHE.get(key) as THREE.MeshStandardMaterial;
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({
+      color,
+      roughness,
+      metalness,
+      emissive
+    });
+    MAT_CACHE.set(key, m);
+  }
+  return m;
+}
+
+export function enableShadows(obj: THREE.Object3D): void {
+  obj.traverse((child) => {
+    if ((child as THREE.Mesh).isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
 }
 
 export function getBasic(color: number, opacity: number = 1, transparent: boolean = false): THREE.MeshBasicMaterial {
@@ -1299,6 +1328,10 @@ export function buildHumanoid(
         gearArmorGroup.add(mail, tabard);
       }
     }
+    enableShadows(gearArmorGroup);
+    enableShadows(gearHelmGroup);
+    enableShadows(weaponHolder);
+    enableShadows(shieldHolder);
   };
 
   const rig: HumanoidRig = {
@@ -1324,6 +1357,7 @@ export function buildHumanoid(
     updateGearVisuals
   };
 
+  enableShadows(root);
   return rig;
 }
 
@@ -2098,53 +2132,136 @@ export function buildEnemyModel(type: EnemyType): EnemyModelRig {
     }
 
     case 'boss_dragon_vermithrax': {
+      // Khloron Goldenhorn: Ancient Emerald Dragon adorned in Sacred Gold Armor
       const dG = new THREE.Group();
 
+      const matGreenScale = getStandard(0x1a5933, 0.62, 0.18);
+      const matDarkGreen = getStandard(0x103d22, 0.68, 0.12);
+      const matBrightGreen = getStandard(0x237d47, 0.58, 0.22);
+      const matWingMembrane = getLambert(0x134827);
+      const matWingBone = getLambert(0x0a2615);
+      const matGoldArmor = getStandard(0xffd700, 0.25, 0.88, 0x332200);
+      const matGoldTrim = getStandard(0xf5b700, 0.30, 0.82, 0x221400);
+      const matDragonEye = getBasic(0xffea00);
+
+      // Torso / Core Body
       const dBody = new THREE.Group();
       dBody.position.set(0, 2.2, 0);
-      const bodyM = new THREE.Mesh(GEO.box, getLambert(0x8a1c14, 0x1a0402));
+      const bodyM = new THREE.Mesh(GEO.box, matGreenScale);
       bodyM.scale.set(2.4, 2.0, 4.2);
       dBody.add(bodyM);
 
-      // Neck, Head and Jaw ALL CHILDREN OF BODY!
+      // Pale underbelly scales
+      const bellyM = new THREE.Mesh(GEO.box, getStandard(0x356e48, 0.72, 0.08));
+      bellyM.scale.set(2.1, 0.4, 3.8);
+      bellyM.position.set(0, -0.9, 0);
+      dBody.add(bellyM);
+
+      // GOLD ARMOR: Massive Gilded Chest Cuirass / Pectoral Plate
+      const chestPlate = new THREE.Mesh(GEO.box, matGoldArmor);
+      chestPlate.scale.set(2.48, 1.6, 1.8);
+      chestPlate.position.set(0, 0.1, 1.1);
+      dBody.add(chestPlate);
+
+      // Gold Cuirass Central Crest & Flank Bands
+      const chestRidge = new THREE.Mesh(GEO.box, matGoldTrim);
+      chestRidge.scale.set(0.4, 1.8, 1.9);
+      chestRidge.position.set(0, 0.1, 1.15);
+      dBody.add(chestRidge);
+
+      const flankL = new THREE.Mesh(GEO.box, matGoldArmor);
+      flankL.scale.set(0.3, 1.2, 2.2);
+      flankL.position.set(-1.26, 0.1, 0.2);
+      const flankR = flankL.clone();
+      flankR.position.x = 1.26;
+      dBody.add(flankL, flankR);
+
+      // Gold Dorsal Spines along back
+      for (let i = 0; i < 4; i++) {
+        const spine = new THREE.Mesh(GEO.cone, matGoldTrim);
+        spine.scale.set(0.25, 0.7 - i * 0.08, 0.35);
+        spine.rotation.x = -0.3;
+        spine.position.set(0, 1.15, 0.9 - i * 0.85);
+        dBody.add(spine);
+      }
+
+      // Neck, Head and Jaw ALL CHILDREN OF BODY
       const neckPivot = new THREE.Group();
       neckPivot.position.set(0, 0.8, 2.0);
-      const neckM = new THREE.Mesh(GEO.cyl, getLambert(0x781810));
-      neckM.scale.set(0.8, 1.9, 0.8);
+      const neckM = new THREE.Mesh(GEO.cyl, matGreenScale);
+      neckM.scale.set(0.85, 1.9, 0.85);
       neckM.rotation.x = 0.6;
       neckM.position.set(0, 0.75, 0.5);
       neckPivot.add(neckM);
 
+      // GOLD ARMOR: Neck Gorget / Throat Guard
+      const neckGorget = new THREE.Mesh(GEO.cyl, matGoldArmor);
+      neckGorget.scale.set(0.96, 0.8, 0.96);
+      neckGorget.rotation.x = 0.6;
+      neckGorget.position.set(0, 0.85, 0.55);
+      neckPivot.add(neckGorget);
+
       const headPivot = new THREE.Group();
       headPivot.position.set(0, 1.5, 1.7);
-      const dSnout = new THREE.Mesh(GEO.box, getLambert(0x9e2017, 0x1a0000));
-      dSnout.scale.set(1.1, 0.85, 1.8);
+      const dSnout = new THREE.Mesh(GEO.box, matBrightGreen);
+      dSnout.scale.set(1.15, 0.85, 1.85);
       headPivot.add(dSnout);
+
+      // GOLD ARMOR: Dragon War-Crown / Forehead Plaque
+      const headCrown = new THREE.Mesh(GEO.box, matGoldArmor);
+      headCrown.scale.set(1.22, 0.32, 1.2);
+      headCrown.position.set(0, 0.45, -0.15);
+      headPivot.add(headCrown);
+
+      const crownNasal = new THREE.Mesh(GEO.box, matGoldTrim);
+      crownNasal.scale.set(0.32, 0.28, 1.4);
+      crownNasal.position.set(0, 0.46, 0.25);
+      headPivot.add(crownNasal);
 
       // Opening/closing lower jaw
       const dJaw = new THREE.Group();
       dJaw.position.set(0, -0.35, 0.45);
-      const jawM = new THREE.Mesh(GEO.box, getLambert(0x7a160d));
-      jawM.scale.set(0.95, 0.35, 1.3);
+      const jawM = new THREE.Mesh(GEO.box, matGreenScale);
+      jawM.scale.set(0.98, 0.35, 1.35);
       dJaw.add(jawM);
+      // Gold chin beard/spike
+      const chinSpike = new THREE.Mesh(GEO.cone, matGoldTrim);
+      chinSpike.scale.set(0.18, 0.55, 0.18);
+      chinSpike.rotation.x = 0.4;
+      chinSpike.position.set(0, -0.3, 0.4);
+      dJaw.add(chinSpike);
       headPivot.add(dJaw);
 
       // Glowing dragon eyes
-      const eyeL = new THREE.Mesh(GEO.sph, getBasic(0xffea00));
+      const eyeL = new THREE.Mesh(GEO.sph, matDragonEye);
       eyeL.scale.setScalar(0.2);
-      eyeL.position.set(-0.55, 0.35, 0.45);
+      eyeL.position.set(-0.58, 0.35, 0.45);
       const eyeR = eyeL.clone();
-      eyeR.position.x = 0.55;
+      eyeR.position.x = 0.58;
       headPivot.add(eyeL, eyeR);
 
-      // Dragon Horns
-      const hornL = new THREE.Mesh(GEO.cone, getLambert(0x2a0505));
-      hornL.scale.set(0.18, 1.1, 0.18);
-      hornL.position.set(-0.45, 0.7, -0.5);
-      hornL.rotation.x = -0.55;
-      const hornR = hornL.clone();
-      hornR.position.x = 0.45;
+      // THE MAJESTIC GOLDEN HORNS ("Goldenhorn")
+      const hornMat = matGoldArmor;
+      // Primary sweeping majestic golden horns
+      const hornL = new THREE.Mesh(GEO.cone, hornMat);
+      hornL.scale.set(0.24, 1.65, 0.24);
+      hornL.position.set(-0.5, 0.88, -0.55);
+      hornL.rotation.set(-0.62, 0, -0.32);
+      const hornR = new THREE.Mesh(GEO.cone, hornMat);
+      hornR.scale.set(0.24, 1.65, 0.24);
+      hornR.position.set(0.5, 0.88, -0.55);
+      hornR.rotation.set(-0.62, 0, 0.32);
       headPivot.add(hornL, hornR);
+
+      // Secondary golden brow spikes
+      const browSpikeL = new THREE.Mesh(GEO.cone, matGoldTrim);
+      browSpikeL.scale.set(0.12, 0.7, 0.12);
+      browSpikeL.position.set(-0.52, 0.55, 0.05);
+      browSpikeL.rotation.set(-0.3, 0, -0.45);
+      const browSpikeR = browSpikeL.clone();
+      browSpikeR.position.x = 0.52;
+      browSpikeR.rotation.z = 0.45;
+      headPivot.add(browSpikeL, browSpikeR);
 
       neckPivot.add(headPivot);
       dBody.add(neckPivot);
@@ -2152,26 +2269,41 @@ export function buildEnemyModel(type: EnemyType): EnemyModelRig {
       // Tail CHILD OF BODY
       const tailP = new THREE.Group();
       tailP.position.set(0, 0.2, -2.1);
-      const tailM = new THREE.Mesh(GEO.cyl, getLambert(0x701510));
+      const tailM = new THREE.Mesh(GEO.cyl, matGreenScale);
       tailM.scale.set(0.65, 3.4, 0.65);
       tailM.rotation.x = -0.4;
       tailM.position.set(0, 0, -1.2);
       tailP.add(tailM);
+
+      // Golden tail spade/blade at the tip
+      const tailBlade = new THREE.Mesh(GEO.cone, matGoldArmor);
+      tailBlade.scale.set(0.45, 1.1, 0.12);
+      tailBlade.rotation.x = -Math.PI / 2;
+      tailBlade.position.set(0, 0.45, -2.8);
+      tailP.add(tailBlade);
       dBody.add(tailP);
 
-      // Dragon Wings ATTACHED TO BODY!
+      // Dragon Wings ATTACHED TO BODY
       const mkWing = (side: number) => {
         const wg = new THREE.Group();
         wg.position.set(side * 1.25, 0.8, 0.3);
-        const wm = new THREE.Mesh(GEO.plane, getLambert(0x6e140d));
+        const wm = new THREE.Mesh(GEO.plane, matWingMembrane);
         wm.scale.set(4.0, 2.5, 1);
         wm.rotation.set(Math.PI / 2, side * 0.35, 0);
         wm.position.set(side * 1.5, 0, 0);
-        const wb = new THREE.Mesh(GEO.cyl, getLambert(0x3e0a06));
-        wb.scale.set(0.12, 3.6, 0.12);
+        const wb = new THREE.Mesh(GEO.cyl, matWingBone);
+        wb.scale.set(0.14, 3.6, 0.14);
         wb.rotation.z = side * -0.6;
         wb.position.set(side * 1.1, 0.3, 0);
-        wg.add(wm, wb);
+        // Golden Wing Shoulder Pauldron & Joint Spur
+        const wingPauldron = new THREE.Mesh(GEO.sph, matGoldArmor);
+        wingPauldron.scale.set(0.42, 0.35, 0.42);
+        wingPauldron.position.set(side * 0.2, 0.1, 0);
+        const wingSpur = new THREE.Mesh(GEO.cone, matGoldTrim);
+        wingSpur.scale.set(0.14, 0.6, 0.14);
+        wingSpur.rotation.z = side * -1.2;
+        wingSpur.position.set(side * 1.2, 0.7, 0);
+        wg.add(wm, wb, wingPauldron, wingSpur);
         return wg;
       };
       const wingL = mkWing(-1);
@@ -2180,23 +2312,42 @@ export function buildEnemyModel(type: EnemyType): EnemyModelRig {
 
       dG.add(dBody);
 
-      // 4 Dragon Legs
+      // 4 Dragon Legs with Golden Vambraces & Greaves
       const mkDLeg = (ox: number, oz: number) => {
         const lg = new THREE.Group();
         lg.position.set(ox, 1.5, oz);
-        const up = new THREE.Mesh(GEO.box, getLambert(0x6e140d));
-        up.scale.set(0.55, 1.4, 0.55);
+        // Upper thigh
+        const up = new THREE.Mesh(GEO.box, matGreenScale);
+        up.scale.set(0.6, 1.4, 0.6);
         up.position.set(0, -0.7, 0);
-        const lo = new THREE.Mesh(GEO.box, getLambert(0x5a1008));
-        lo.scale.set(0.48, 1.1, 0.48);
+        // Golden Knee Cop / Poleyn
+        const kneeArmor = new THREE.Mesh(GEO.box, matGoldArmor);
+        kneeArmor.scale.set(0.72, 0.5, 0.72);
+        kneeArmor.position.set(0, -0.75, 0.08);
+        // Lower shin
+        const lo = new THREE.Mesh(GEO.box, matDarkGreen);
+        lo.scale.set(0.5, 1.1, 0.5);
         lo.position.set(0, -1.5, 0.15);
-        lg.add(up, lo);
+        // Golden Greave / Vambrace
+        const greave = new THREE.Mesh(GEO.box, matGoldTrim);
+        greave.scale.set(0.58, 0.8, 0.58);
+        greave.position.set(0, -1.45, 0.18);
+        // Golden Claws
+        const clawMat = matGoldArmor;
+        for (let c = -1; c <= 1; c++) {
+          const claw = new THREE.Mesh(GEO.cone, clawMat);
+          claw.scale.set(0.08, 0.35, 0.08);
+          claw.rotation.x = Math.PI / 2;
+          claw.position.set(c * 0.16, -2.0, 0.4);
+          lg.add(claw);
+        }
+        lg.add(up, kneeArmor, lo, greave);
         return lg;
       };
-      const dFL = mkDLeg(-1.15, 1.3);
-      const dFR = mkDLeg(1.15, 1.3);
-      const dBL = mkDLeg(-1.15, -1.3);
-      const dBR = mkDLeg(1.15, -1.3);
+      const dFL = mkDLeg(-1.2, 1.3);
+      const dFR = mkDLeg(1.2, 1.3);
+      const dBL = mkDLeg(-1.2, -1.3);
+      const dBR = mkDLeg(1.2, -1.3);
       dG.add(dFL, dFR, dBL, dBR);
 
       createShadowBlob(root, 2.4);
@@ -2229,12 +2380,14 @@ export function buildEnemyModel(type: EnemyType): EnemyModelRig {
           dJaw.rotation.x *= 0.8;
         }
       };
+      enableShadows(root);
       return { root, update };
     }
 
     default: {
       const rig = buildHumanoid(0.85);
       root.add(rig.root);
+      enableShadows(root);
       return { root, update: (t: number, s: number, a: number = 0) => rig.animate(t, s, a) };
     }
   }
@@ -2516,6 +2669,153 @@ export function buildPropModel(type: DestructibleProp['type']): { root: THREE.Gr
     darkPillar.position.set(0, 2.2, 0);
 
     root.add(dais, pillar, skull, darkPillar);
+  } else if (type === 'sarcophagus') {
+    // Ancient Heavy Stone Sarcophagus / Tomb
+    const baseMat = getLambert(0x42454e, 0x1c1e24);
+    const goldTrimMat = getLambert(0x9a8355, 0x332811);
+
+    const base = new THREE.Mesh(GEO.box, baseMat);
+    base.scale.set(1.1, 0.62, 1.9);
+    base.position.set(0, 0.31, 0);
+
+    const plinth = new THREE.Mesh(GEO.box, baseMat);
+    plinth.scale.set(1.22, 0.12, 2.02);
+    plinth.position.set(0, 0.06, 0);
+
+    const lid = new THREE.Mesh(GEO.box, baseMat);
+    lid.scale.set(1.16, 0.22, 1.94);
+    lid.position.set(0.04, 0.68, 0.02);
+    lid.rotation.y = 0.04;
+
+    const emblem = new THREE.Mesh(GEO.box, goldTrimMat);
+    emblem.scale.set(0.3, 0.06, 0.9);
+    emblem.position.set(0.04, 0.8, 0.02);
+
+    const emblemCross = new THREE.Mesh(GEO.box, goldTrimMat);
+    emblemCross.scale.set(0.65, 0.06, 0.24);
+    emblemCross.position.set(0.04, 0.8, -0.1);
+
+    const soulRune = new THREE.Mesh(new THREE.OctahedronGeometry(0.12, 0), getBasic(0x60a5fa, 0.85, true));
+    soulRune.position.set(-0.35, 0.65, 0.4);
+
+    root.add(base, plinth, lid, emblem, emblemCross, soulRune);
+  } else if (type === 'weapon_rack') {
+    // Sturdy Wooden Weapon Stand with Crossed Blades & Iron Shield
+    const woodMat = getLambert(0x4a321d);
+    const metalMat = getLambert(0xb0b8c8, 0x222933);
+    const goldMat = getLambert(0xd4af37, 0x443311);
+
+    const postL = new THREE.Mesh(GEO.box, woodMat);
+    postL.scale.set(0.12, 1.4, 0.12);
+    postL.position.set(-0.75, 0.7, 0);
+
+    const postR = postL.clone();
+    postR.position.x = 0.75;
+
+    const footL = new THREE.Mesh(GEO.box, woodMat);
+    footL.scale.set(0.16, 0.12, 0.65);
+    footL.position.set(-0.75, 0.06, 0);
+
+    const footR = footL.clone();
+    footR.position.x = 0.75;
+
+    const beam = new THREE.Mesh(GEO.box, woodMat);
+    beam.scale.set(1.65, 0.12, 0.12);
+    beam.position.set(0, 1.1, 0);
+
+    const sword1 = new THREE.Mesh(GEO.box, metalMat);
+    sword1.scale.set(0.08, 1.25, 0.04);
+    sword1.position.set(0, 0.75, 0.05);
+    sword1.rotation.z = Math.PI / 6;
+
+    const sword2 = new THREE.Mesh(GEO.box, metalMat);
+    sword2.scale.set(0.08, 1.25, 0.04);
+    sword2.position.set(0, 0.75, 0.05);
+    sword2.rotation.z = -Math.PI / 6;
+
+    const shield = new THREE.Mesh(GEO.cyl, metalMat);
+    shield.scale.set(0.38, 0.06, 0.38);
+    shield.rotation.x = Math.PI / 2;
+    shield.position.set(0, 0.75, 0.14);
+
+    const shieldBoss = new THREE.Mesh(GEO.sph, goldMat);
+    shieldBoss.scale.setScalar(0.12);
+    shieldBoss.position.set(0, 0.75, 0.2);
+
+    root.add(postL, postR, footL, footR, beam, sword1, sword2, shield, shieldBoss);
+  } else if (type === 'campfire') {
+    // Cozy Dungeon Resting Campfire with Rocks, Charred Logs, Fire & Warm Dynamic PointLight
+    const rockMat = getLambert(0x423832, 0x1f1916);
+    const logMat = getLambert(0x28190e);
+
+    const rockCount = 8;
+    for (let i = 0; i < rockCount; i++) {
+      const angle = (i * Math.PI * 2) / rockCount;
+      const rock = new THREE.Mesh(GEO.sph, rockMat);
+      const s = 0.16 + Math.sin(i * 1.7) * 0.04;
+      rock.scale.set(s, s * 0.8, s);
+      rock.position.set(Math.cos(angle) * 0.62, 0.12, Math.sin(angle) * 0.62);
+      root.add(rock);
+    }
+
+    for (let i = 0; i < 4; i++) {
+      const angle = (i * Math.PI) / 4;
+      const log = new THREE.Mesh(GEO.cyl, logMat);
+      log.scale.set(0.09, 0.85, 0.09);
+      log.rotation.z = Math.PI / 2;
+      log.rotation.y = angle;
+      log.position.set(0, 0.12 + (i % 2) * 0.08, 0);
+      root.add(log);
+    }
+
+    const flameCore = new THREE.Mesh(GEO.cone, getBasic(0xff5500, 0.95, true));
+    flameCore.scale.set(0.28, 0.55, 0.28);
+    flameCore.position.set(0, 0.38, 0);
+
+    const flameInner = new THREE.Mesh(GEO.cone, getBasic(0xffea00, 0.95, true));
+    flameInner.scale.set(0.16, 0.38, 0.16);
+    flameInner.position.set(0, 0.36, 0);
+
+    const campLight = new THREE.PointLight(0xff7722, 1.5, 8.5, 1.8);
+    campLight.position.set(0, 0.65, 0);
+
+    root.add(flameCore, flameInner, campLight);
+  } else if (type === 'fire_jet') {
+    // Environmental Floor Trap: Iron Grate with Erupting Flame Column
+    const ironMat = getLambert(0x282a32, 0x111218);
+    const grateBase = new THREE.Mesh(GEO.box, ironMat);
+    grateBase.scale.set(1.4, 0.08, 1.4);
+    grateBase.position.set(0, 0.04, 0);
+
+    const magma = new THREE.Mesh(GEO.box, getBasic(0xff3300, 0.85, true));
+    magma.scale.set(1.2, 0.04, 1.2);
+    magma.position.set(0, 0.02, 0);
+
+    for (let i = -0.45; i <= 0.45; i += 0.3) {
+      const barX = new THREE.Mesh(GEO.box, ironMat);
+      barX.scale.set(0.08, 0.06, 1.25);
+      barX.position.set(i, 0.07, 0);
+
+      const barZ = new THREE.Mesh(GEO.box, ironMat);
+      barZ.scale.set(1.25, 0.06, 0.08);
+      barZ.position.set(0, 0.07, i);
+
+      grateBase.add(barX, barZ);
+    }
+
+    const flamePillar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.35, 0.65, 2.6, 12, 1, true),
+      getBasic(0xff4400, 0.85, true)
+    );
+    flamePillar.name = 'flame_pillar';
+    flamePillar.position.set(0, 1.3, 0);
+    flamePillar.visible = false;
+
+    const flameLight = new THREE.PointLight(0xff5500, 0, 7.5, 2.0);
+    flameLight.name = 'flame_light';
+    flameLight.position.set(0, 1.3, 0);
+
+    root.add(grateBase, magma, flamePillar, flameLight);
   }
   return { root };
 }
@@ -2595,6 +2895,7 @@ export function buildGrandPortalModel(): { root: THREE.Group; update: (t: number
     vortexGroup.scale.set(pulse, pulse, 1);
   };
 
+  enableShadows(root);
   return { root, update };
 }
 
@@ -2676,5 +2977,6 @@ export function buildAllyModel(type: AllyType): { root: THREE.Group; update: (t:
     }
   };
 
+  enableShadows(root);
   return { root, update };
 }

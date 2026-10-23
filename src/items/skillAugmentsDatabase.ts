@@ -311,6 +311,17 @@ export const SKILL_AUGMENTS: SkillAugment[] = [
     effectType: 'orbit',
     value: 12
   },
+  {
+    id: 'clr_flame_purify',
+    name: 'Onda Purificatrice',
+    skillTarget: 'skill1',
+    classId: 'cleric',
+    icon: '✨',
+    category: 'Grazia Celestiale',
+    desc: 'Lanciare la Fiamma Sacra purifica istantaneamente il Chierico rimuovendo le afflizioni e ripristinando 30 Punti Ferita!',
+    effectType: 'heal',
+    value: 30
+  },
   // Secondary: Vita (Parola di Guarigione)
   {
     id: 'clr_heal_sanctuary',

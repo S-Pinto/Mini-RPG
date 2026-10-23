@@ -29,36 +29,74 @@ export interface GroundLoot {
   bobOffset: number;
 }
 
-function createLootSprite(title: string, sub: string, color: string): THREE.Sprite {
+function createLootSprite(
+  title: string,
+  sub: string,
+  color: string,
+  tier: 'small' | 'normal' | 'large' = 'normal'
+): THREE.Sprite {
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 72;
+
+  if (tier === 'small') {
+    canvas.width = 160;
+    canvas.height = 44;
+  } else if (tier === 'normal') {
+    canvas.width = 220;
+    canvas.height = 58;
+  } else {
+    canvas.width = 280;
+    canvas.height = 76;
+  }
+
   const ctx = canvas.getContext('2d');
   if (ctx) {
-    ctx.fillStyle = 'rgba(10, 8, 18, 0.85)';
+    const w = canvas.width;
+    const h = canvas.height;
+
+    // Dark fantasy semi-transparent pill badge
+    ctx.fillStyle = 'rgba(10, 8, 18, 0.88)';
     ctx.beginPath();
-    ctx.roundRect(6, 6, 244, 60, 10);
+    ctx.roundRect(4, 4, w - 8, h - 8, tier === 'small' ? 8 : 12);
     ctx.fill();
-    ctx.lineWidth = 2.5;
+
+    ctx.lineWidth = tier === 'small' ? 1.5 : (tier === 'large' ? 3.0 : 2.0);
     ctx.strokeStyle = color;
     ctx.stroke();
 
-    ctx.font = 'bold 20px Cinzel, serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = color;
-    ctx.fillText(title, 128, 30);
+    if (tier === 'small') {
+      ctx.font = 'bold 15px Outfit, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = color;
+      ctx.fillText(title, w / 2, h / 2 + 5);
+    } else {
+      ctx.font = `bold ${tier === 'large' ? '20px' : '17px'} Cinzel, serif`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = color;
+      ctx.fillText(title, w / 2, sub ? (tier === 'large' ? 32 : 25) : h / 2 + 6);
 
-    if (sub) {
-      ctx.font = '13px Outfit, sans-serif';
-      ctx.fillStyle = '#d0c4e8';
-      ctx.fillText(sub, 128, 52);
+      if (sub) {
+        ctx.font = `${tier === 'large' ? '13px' : '11px'} Outfit, sans-serif`;
+        ctx.fillStyle = '#d0c4e8';
+        ctx.fillText(sub, w / 2, tier === 'large' ? 56 : 46);
+      }
     }
   }
+
   const texture = new THREE.CanvasTexture(canvas);
   const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(1.7, 0.48, 1);
-  sprite.position.y = 1.05;
+
+  if (tier === 'small') {
+    sprite.scale.set(0.9, 0.25, 1);
+    sprite.position.y = 0.55;
+  } else if (tier === 'normal') {
+    sprite.scale.set(1.3, 0.35, 1);
+    sprite.position.y = 0.8;
+  } else {
+    sprite.scale.set(1.8, 0.49, 1);
+    sprite.position.y = 1.25;
+  }
+
   return sprite;
 }
 
@@ -98,6 +136,22 @@ export class GameState {
     this.scene.add(combat.group);
     this.scene.add(telegraphs.group);
     this.scene.add(particles.group);
+
+    // Hook destructible furniture loot drops
+    combat.onPropDropItem = (propType, x, y) => {
+      if (propType === 'sarcophagus') {
+        const rar = Math.random() < 0.35 ? 'epic' : 'rare';
+        const slots: ('weapon' | 'armor' | 'helm' | 'ring' | 'relic')[] = ['weapon', 'armor', 'helm', 'ring', 'relic'];
+        const slot = slots[Math.floor(Math.random() * slots.length)];
+        const item = generateItem(slot, this.currentZone.actNumber, rar, this.player.classId);
+        this.spawnGroundLoot('item', x, y, undefined, item);
+        this.spawnGroundLoot('exp', x + 0.3, y - 0.2, 35);
+      } else if (propType === 'weapon_rack') {
+        const rar = Math.random() < 0.25 ? 'rare' : 'uncommon';
+        const item = generateItem('weapon', this.currentZone.actNumber, rar, this.player.classId);
+        this.spawnGroundLoot('item', x, y, undefined, item);
+      }
+    };
   }
 
   public startNewRun(classId: ClassId, subclassIndex: number): void {
@@ -313,6 +367,7 @@ export class GameState {
             const dmg = this.player.takeDamage(12);
             if (dmg > 0) {
               sound.playerHurt();
+              combat.addScreenShake(0.2);
               particles.spawnBurst(this.player.x, 0.4, this.player.y, 8, 0x991b1b, 4);
               particles.spawnFloatingText(this.player.x, 2.2, this.player.y, `-${dmg} PUNTE ACCIAIO!`, '#dc2626', true);
             }
@@ -324,6 +379,64 @@ export class GameState {
               e.takeDamage(24, e.x - pr.x, e.y - pr.y, 4);
               particles.spawnBurst(e.x, 0.4, e.y, 8, 0x991b1b, 4);
               particles.spawnFloatingText(e.x, 1.8, e.y, '24 TRAPPOLA', '#ef4444');
+            }
+          }
+        }
+      } else if (pr.type === 'fire_jet') {
+        const cycle = (nowSec + pr.id * 1.1) % 3.4;
+        const isCharging = cycle >= 1.6 && cycle < 2.2;
+        const isErupting = cycle >= 2.2;
+
+        // Toggle and animate 3D flame pillar and dynamic light
+        if (pr.mesh) {
+          const flamePillar = pr.mesh.getObjectByName('flame_pillar') as THREE.Mesh | undefined;
+          const flameLight = pr.mesh.getObjectByName('flame_light') as THREE.PointLight | undefined;
+
+          if (flamePillar) {
+            flamePillar.visible = isErupting;
+            if (isErupting) {
+              flamePillar.scale.y = 0.85 + Math.sin(nowSec * 24) * 0.25;
+            }
+          }
+          if (flameLight) {
+            if (isErupting) {
+              flameLight.intensity = 1.9 + Math.sin(nowSec * 28) * 0.6;
+            } else if (isCharging) {
+              flameLight.intensity = 0.45 + Math.sin(nowSec * 16) * 0.2;
+            } else {
+              flameLight.intensity = 0.04;
+            }
+          }
+        }
+
+        if (isCharging) {
+          if (Math.random() < 0.22) {
+            particles.spawnBurst(pr.x, 0.25, pr.y, 2, 0xff6600, 2);
+          }
+        } else if (isErupting) {
+          if (Math.random() < 0.3) {
+            particles.spawnBurst(pr.x, 1.1, pr.y, 4, 0xff5500, 3);
+          }
+
+          // Damage player if standing on erupting flame grate
+          if (Math.hypot(this.player.x - pr.x, this.player.y - pr.y) < 1.2) {
+            const dmg = this.player.takeDamage(16);
+            if (dmg > 0) {
+              sound.fireball();
+              combat.addScreenShake(0.3);
+              particles.spawnBurst(this.player.x, 0.8, this.player.y, 10, 0xff4400, 4);
+              particles.spawnFloatingText(this.player.x, 2.2, this.player.y, `-${dmg} 🔥 GETTO DI FUOCO!`, '#ff4400', true);
+            }
+          }
+
+          // Damage enemies standing on flame grate
+          for (const e of this.enemies) {
+            if (e.isDead) continue;
+            if (Math.hypot(e.x - pr.x, e.y - pr.y) < e.stats.radius + 0.65) {
+              e.takeDamage(32, e.x - pr.x, e.y - pr.y, 4);
+              e.applyStatusEffect('burn', 4.0, 8);
+              particles.spawnBurst(e.x, 0.8, e.y, 6, 0xff5500, 3);
+              particles.spawnFloatingText(e.x, 1.8, e.y, '32 🔥 FUOCO', '#ff5500');
             }
           }
         }
@@ -445,26 +558,38 @@ export class GameState {
       if (dist < 1.0) {
         if (l.type === 'coin') {
           sound.coin();
-          this.player.gold += l.value || 1;
-          particles.spawnFloatingText(l.x, 1.8, l.y, `+${l.value || 1} Oro`, '#ffd700');
+          const baseVal = l.value !== undefined ? Math.round(l.value) : 1;
+          const mult = (this.player as any).goldMultiplier || 1.0;
+          const coinVal = Math.max(1, Math.round(baseVal * mult));
+          this.player.gold = Math.round(this.player.gold + coinVal);
+
+          const tier = coinVal >= 25 ? 'large' : (coinVal >= 6 ? 'normal' : 'small');
+          const duration = tier === 'small' ? 0.6 : (tier === 'large' ? 1.3 : 0.85);
+          particles.spawnFloatingText(l.x, 1.8, l.y, `+${coinVal} Oro`, '#ffd700', tier === 'large', tier, duration);
         } else if (l.type === 'exp') {
           sound.levelUp();
-          const xpGained = l.value || 20;
+          const xpGained = Math.max(1, Math.round(l.value || 20));
           this.player.addXp(xpGained);
-          particles.spawnBurst(l.x, 1.0, l.y, 16, 0x00ffee, 5);
-          particles.spawnFloatingText(l.x, 2.0, l.y, `+${xpGained} EXP`, '#00ffee', true);
+
+          const tier = xpGained >= 100 ? 'large' : (xpGained >= 35 ? 'normal' : 'small');
+          const duration = tier === 'small' ? 0.65 : (tier === 'large' ? 1.35 : 0.85);
+          particles.spawnBurst(l.x, 1.0, l.y, tier === 'small' ? 10 : (tier === 'large' ? 24 : 16), 0x00ffee, tier === 'small' ? 3 : 6);
+          particles.spawnFloatingText(l.x, 2.0, l.y, `+${xpGained} EXP`, '#00ffee', tier === 'large', tier, duration);
         } else if (l.type === 'heart') {
           sound.heal();
           this.player.potions++;
-          const healed = this.player.heal(Math.round(this.player.maxHp * 0.45));
+          const healed = Math.round(this.player.heal(Math.round(this.player.maxHp * 0.45)));
           particles.spawnShockwave(l.x, l.y, 2.5, 0xff3355);
-          particles.spawnFloatingText(l.x, 2.0, l.y, `+1 Pozione Cura (+${healed} PV)`, '#55ff77', true);
+          particles.spawnFloatingText(l.x, 2.0, l.y, `+1 Pozione Cura (+${healed} PV)`, '#55ff77', true, 'normal', 1.0);
         } else if (l.type === 'item' && l.item) {
           sound.chestOpen();
           this.player.bag.push(l.item);
           const rar = RARITIES[l.item.rarity];
-          particles.spawnBurst(l.x, 1.5, l.y, 25, rar.hex, 6);
-          particles.spawnFloatingText(l.x, 2.4, l.y, `Equip: ${l.item.name} (${rar.name})`, rar.color, true);
+          const isHighTier = l.item.rarity === 'legendary' || l.item.rarity === 'epic';
+          const tier = isHighTier ? 'epic' : (l.item.rarity === 'rare' ? 'large' : 'normal');
+          const duration = isHighTier ? 1.8 : (l.item.rarity === 'rare' ? 1.35 : 1.0);
+          particles.spawnBurst(l.x, 1.5, l.y, isHighTier ? 35 : 22, rar.hex, isHighTier ? 8 : 5);
+          particles.spawnFloatingText(l.x, 2.4, l.y, `Equip: ${l.item.name} (${rar.name})`, rar.color, true, tier, duration);
         }
 
         this.dynamicGroup.remove(l.mesh);
@@ -490,12 +615,16 @@ export class GameState {
     value?: number,
     item?: Item
   ): void {
+    if (value !== undefined) value = Math.round(value);
     const mesh = new THREE.Group();
     const baseY = 0.4;
     const rotSpeed = 1.6 + Math.random() * 1.4;
     const bobOffset = Math.random() * Math.PI * 2;
 
     if (type === 'exp') {
+      const expVal = Math.round(value || 15);
+      const tier = expVal >= 100 ? 'large' : (expVal >= 35 ? 'normal' : 'small');
+
       // Glowing Cyan/Emerald Crystal with rotating ring
       const gem = new THREE.Mesh(
         new THREE.OctahedronGeometry(0.24, 0),
@@ -508,7 +637,7 @@ export class GameState {
       gem.position.y = 0.35;
       mesh.add(gem);
 
-      const label = createLootSprite(`✨ +${value || 15} EXP`, 'Sfera di Saggezza', '#00ffee');
+      const label = createLootSprite(`✨ +${expVal} EXP`, tier === 'small' ? '' : 'Sfera di Saggezza', '#00ffee', tier);
       mesh.add(label);
     } else if (type === 'heart') {
       // 3D Glass Health Potion Flask with Glowing Red Elixir & Cross
@@ -533,9 +662,12 @@ export class GameState {
       bottle.position.y = 0.3;
       mesh.add(bottle);
 
-      const label = createLootSprite('🧪 Pozione Curativa', 'Recupera 45% PV (Tasto R)', '#ff4466');
+      const label = createLootSprite('🧪 Pozione Curativa', 'Recupera 45% PV (Tasto R)', '#ff4466', 'normal');
       mesh.add(label);
     } else if (type === 'coin') {
+      const coinVal = Math.round(value || 1);
+      const tier = coinVal >= 25 ? 'large' : (coinVal >= 6 ? 'normal' : 'small');
+
       // Golden Coin
       const coin = new THREE.Mesh(GEO.cyl, getLambert(0xffd700, 0x443300));
       coin.scale.set(0.22, 0.04, 0.22);
@@ -543,26 +675,86 @@ export class GameState {
       coin.position.y = 0.3;
       mesh.add(coin);
 
-      const label = createLootSprite(`💰 +${value || 1} Oro`, 'Monete di Okkarn', '#ffd700');
+      const label = createLootSprite(`💰 +${coinVal} Oro`, tier === 'small' ? '' : 'Monete di Okkarn', '#ffd700', tier);
       mesh.add(label);
     } else if (type === 'item' && item) {
       const rar = RARITIES[item.rarity];
       const rarHex = rar.hex;
 
-      // Vertical Light Pillar reaching into the sky!
-      const beam = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.18, 0.18, 3.5, 12, 1, true),
-        getBasic(rarHex, 0.28, true)
-      );
-      beam.position.y = 1.75;
-      mesh.add(beam);
+      // Audio fanfare & particle impact when high-tier loot drops
+      if (item.rarity === 'legendary' || item.rarity === 'epic') {
+        sound.legendaryDrop();
+        particles.spawnShockwave(x, y, 4.2, rarHex, 0.45);
+        particles.spawnBurst(x, 1.2, y, 28, rarHex, 8);
+      } else if (item.rarity === 'rare') {
+        particles.spawnShockwave(x, y, 3.0, rarHex, 0.3);
+        particles.spawnBurst(x, 1.0, y, 16, rarHex, 5);
+      }
 
-      // Ground glow ring
-      const groundGlow = new THREE.Mesh(GEO.circle, getBasic(rarHex, 0.5, true));
-      groundGlow.scale.set(0.5, 0.5, 0.5);
+      // Dynamic Vertical Loot Beam with multi-tiered grandeur by rarity
+      let beamHeight = 4.0;
+      let innerRadius = 0.12;
+      let outerRadius = 0.28;
+      let coreOpacity = 0.65;
+      let auraOpacity = 0.22;
+
+      if (item.rarity === 'legendary') {
+        beamHeight = 8.5;
+        innerRadius = 0.18;
+        outerRadius = 0.44;
+        coreOpacity = 0.95;
+        auraOpacity = 0.38;
+      } else if (item.rarity === 'epic') {
+        beamHeight = 6.8;
+        innerRadius = 0.15;
+        outerRadius = 0.36;
+        coreOpacity = 0.85;
+        auraOpacity = 0.30;
+      } else if (item.rarity === 'rare') {
+        beamHeight = 5.2;
+        innerRadius = 0.13;
+        outerRadius = 0.30;
+        coreOpacity = 0.72;
+        auraOpacity = 0.25;
+      }
+
+      // Inner concentrated energy core pillar
+      const coreBeam = new THREE.Mesh(
+        new THREE.CylinderGeometry(innerRadius * 0.7, innerRadius, beamHeight, 16, 1, true),
+        getBasic(rarHex, coreOpacity, true)
+      );
+      coreBeam.position.y = beamHeight / 2;
+      mesh.add(coreBeam);
+
+      // Outer ethereal aura flare cylinder
+      const auraBeam = new THREE.Mesh(
+        new THREE.CylinderGeometry(outerRadius * 0.65, outerRadius, beamHeight, 16, 1, true),
+        getBasic(rarHex, auraOpacity, true)
+      );
+      auraBeam.position.y = beamHeight / 2;
+      mesh.add(auraBeam);
+
+      // Concentric ground energy rings
+      const groundGlow = new THREE.Mesh(GEO.circle, getBasic(rarHex, 0.55, true));
+      groundGlow.scale.set(outerRadius * 2.2, outerRadius * 2.2, outerRadius * 2.2);
       groundGlow.rotation.x = -Math.PI / 2;
       groundGlow.position.y = 0.02;
       mesh.add(groundGlow);
+
+      const groundRing = new THREE.Mesh(GEO.torus, getBasic(rarHex, 0.75, true));
+      groundRing.scale.set(outerRadius * 1.8, outerRadius * 1.8, 0.04);
+      groundRing.rotation.x = Math.PI / 2;
+      groundRing.position.y = 0.04;
+      mesh.add(groundRing);
+
+      // Orbiting radiant ring at mid-beam for high-tier loot
+      if (item.rarity === 'rare' || item.rarity === 'epic' || item.rarity === 'legendary') {
+        const energyRing = new THREE.Mesh(GEO.torus, getBasic(rarHex, 0.85, true));
+        energyRing.scale.set(outerRadius * 1.2, outerRadius * 1.2, 0.05);
+        energyRing.rotation.x = Math.PI / 2.5;
+        energyRing.position.y = 1.35;
+        mesh.add(energyRing);
+      }
 
       // 3D Item Model tailored to its specific type and glowing with rarity color!
       const itemGroup = new THREE.Group();
@@ -668,7 +860,8 @@ export class GameState {
 
       mesh.add(itemGroup);
 
-      const label = createLootSprite(`${item.icon || '✨'} ${item.name}`, `[${rar.name}] · Livello ${item.ilvl}`, rar.color);
+      const isHighTier = item.rarity === 'legendary' || item.rarity === 'epic';
+      const label = createLootSprite(`${item.icon || '✨'} ${item.name}`, `[${rar.name}] · Livello ${item.ilvl}`, rar.color, isHighTier ? 'large' : 'normal');
       mesh.add(label);
     }
 
@@ -796,14 +989,14 @@ export class GameState {
         className: this.player.classId.toUpperCase(),
         subclassName: this.player.subclass.name,
         level: this.player.level,
-        zoneName: 'Drago Vermithrax (Vittoria)',
+        zoneName: 'Khloron Goldenhorn (Vittoria)',
         gold: this.player.gold,
         score: this.player.level * 200 + this.player.gold * 3 + 2000,
         date: new Date().toLocaleDateString('it-IT')
       });
       modals.showMessage(
         'VITTORIA! L’ISOLA DI OKKARN È LIBERA',
-        'Hai sconfitto Vermithrax l’Antico Drago nelle viscere di Vazark! I popoli di Azren, Elshiff e Morgen possono finalmente ricostruire le terre di Elanthria. Gloria a te, Campione dei Renegades! Il tuo punteggio è al vertice della Classifica!',
+        'Hai sconfitto Khloron Goldenhorn, il Drago Verde corazzato in oro nelle viscere di Vazark! I popoli di Azren, Ealscylf e Morgen possono finalmente ricostruire le terre di Elanthria. Gloria a te, Campione dei Renegades! Il tuo punteggio è al vertice della Classifica!',
         'Nuova Campagna D&D',
         () => modals.showClassSelect()
       );

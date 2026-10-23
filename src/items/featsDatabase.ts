@@ -202,7 +202,7 @@ export const DND_FEATS: FeatUpgrade[] = [
   {
     id: 'divine_sanctuary',
     name: 'Santuario del Sole Eterno',
-    dndSource: 'Tomo dei Santi di Elshiff',
+    dndSource: 'Tomo dei Santi di Ealscylf',
     category: 'Sopravvivenza',
     desc: '+2.8 Rigenerazione vita al secondo, +45 PV massimi e +12 Armatura.',
     color: '#ab47bc',

@@ -25,8 +25,18 @@ export class Player {
   public skillAugments: SkillAugment[] = [];
   public activePacts: DarkPact[] = [];
   public skillCharges: Record<string, number> = {};
-  public activeOrbs: { angle: number; radius: number; timer: number; color: number; damage: number }[] = [];
+  public activeOrbs: {
+    angle: number;
+    radius: number;
+    timer: number;
+    color: number;
+    damage: number;
+    hitCooldown?: number;
+    isHealing?: boolean;
+    healTick?: number;
+  }[] = [];
   public bonusShield = 0;
+  public flurryCritTimer = 0;
 
   public hp: number;
   public maxHp: number;
@@ -153,7 +163,8 @@ export class Player {
   }
 
   public addXp(amount: number): boolean {
-    this.xp += amount;
+    const cleanAmount = Math.max(1, Math.round(amount));
+    this.xp += cleanAmount;
     let leveledUp = false;
     while (this.xp >= this.xpNext) {
       this.xp -= this.xpNext;
@@ -229,6 +240,7 @@ export class Player {
     if (this.skill2Cd > 0) this.skill2Cd -= dt;
     if (this.potionCd > 0) this.potionCd -= dt;
     if (this.invulnerableTimer > 0) this.invulnerableTimer -= dt;
+    if (this.flurryCritTimer > 0) this.flurryCritTimer -= dt;
 
     // Update active orbs (orbiting fire/holy orbs)
     for (let i = this.activeOrbs.length - 1; i >= 0; i--) {
@@ -264,7 +276,7 @@ export class Player {
     const damageReduction = Math.min(0.65, this.stats.armor / (this.stats.armor + 40));
     const finalDamage = Math.max(1, Math.round(amount * (1 - damageReduction)));
 
-    this.hp -= finalDamage;
+    this.hp = Math.max(0, Math.round(this.hp - finalDamage));
     this.invulnerableTimer = 0.45; // I-frames
 
     // Haptic feedback for mobile
@@ -276,8 +288,9 @@ export class Player {
   }
 
   public heal(amount: number): number {
-    const prev = this.hp;
-    this.hp = Math.min(this.maxHp, this.hp + amount);
+    const cleanAmount = Math.max(1, Math.round(amount));
+    const prev = Math.round(this.hp);
+    this.hp = Math.min(this.maxHp, Math.round(prev + cleanAmount));
     return this.hp - prev;
   }
 }

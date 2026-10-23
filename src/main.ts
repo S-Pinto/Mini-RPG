@@ -19,19 +19,51 @@ const renderer = new THREE.WebGLRenderer({
   powerPreference: 'high-performance'
 });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.25;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 300);
 const PITCH = 56 * (Math.PI / 180);
 
-// Scene Lights
-const ambLight = new THREE.AmbientLight(0x8a78c8, 1.1);
-const dirLight = new THREE.DirectionalLight(0xffedd4, 0.85);
-dirLight.position.set(16, 28, 12);
-const playerTorch = new THREE.PointLight(0xffaa55, 1.4, 22, 1.4);
+// Scene Lights & Atmospheric Illumination
+const ambLight = new THREE.AmbientLight(0x8a78c8, 0.95);
+
+const dirLight = new THREE.DirectionalLight(0xfff1dc, 1.15);
+dirLight.position.set(18, 32, 14);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.width = 2048;
+dirLight.shadow.mapSize.height = 2048;
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 120;
+dirLight.shadow.camera.left = -24;
+dirLight.shadow.camera.right = 24;
+dirLight.shadow.camera.top = 20;
+dirLight.shadow.camera.bottom = -20;
+dirLight.shadow.bias = -0.0006;
+dirLight.shadow.radius = 2.0;
+
+// Atmospheric Rim / Silhouette Fill Light
+const rimLight = new THREE.DirectionalLight(0x5577bb, 0.45);
+rimLight.position.set(-16, 18, -12);
+
+// Dynamic Player Torch with Soft Shadows & Warm Radial Falloff
+const playerTorch = new THREE.PointLight(0xffaa55, 1.8, 24, 1.35);
+playerTorch.castShadow = true;
+playerTorch.shadow.mapSize.width = 1024;
+playerTorch.shadow.mapSize.height = 1024;
+playerTorch.shadow.bias = -0.002;
+playerTorch.shadow.radius = 2.0;
 
 gameState.scene.add(ambLight);
 gameState.scene.add(dirLight);
+gameState.scene.add(rimLight);
 gameState.scene.add(playerTorch);
+
+// Atmospheric Depth Fog
+gameState.scene.fog = new THREE.FogExp2(0x181226, 0.016);
 
 // 2. Camera Positioning & Responsive Resizing
 const camState = {
@@ -266,14 +298,31 @@ function gameLoop(now: number): void {
     // 2. Update Game State (enemies, loots, doors, level progression)
     gameState.update(dt);
 
-    // 3. Update Scene Lighting based on Zone
+    // 3. Update Scene Lighting & Atmosphere based on Zone
     ambLight.color.setHex(gameState.currentZone.ambientColor);
     dirLight.color.setHex(gameState.currentZone.lightColor);
     playerTorch.color.setHex(gameState.currentZone.torchColor);
-    playerTorch.position.set(gameState.player.x, 3.5, gameState.player.y);
+    playerTorch.position.set(gameState.player.x, 3.4, gameState.player.y);
 
-    // Torch light flicker
-    playerTorch.intensity = 1.3 + Math.sin(now * 0.015) * 0.15;
+    // Organic dual-frequency torch flicker
+    playerTorch.intensity = 1.6 + Math.sin(now * 0.014) * 0.18 + Math.cos(now * 0.033) * 0.09;
+
+    // Update atmospheric fog color smoothly per zone
+    if (gameState.scene.fog) {
+      (gameState.scene.fog as THREE.FogExp2).color.setHex(gameState.currentZone.fogColor);
+    }
+
+    // Ambient floating atmospheric motes (embers, spores, wisps, dust)
+    if (Math.random() < 0.28) {
+      const mx = Math.random() * WORLD_W;
+      const my = 0.2 + Math.random() * 1.6;
+      const mz = Math.random() * WORLD_H;
+      let moteColor = 0xd4b886; // Azren ruins dust
+      if (gameState.currentZone.id === 'elshiff') moteColor = 0x00ffee; // Elven mana wisp
+      else if (gameState.currentZone.id === 'morgen') moteColor = 0x55ff77; // Swamp spore
+      else if (gameState.currentZone.id === 'vazark') moteColor = 0xff6622; // Volcanic ember
+      particles.spawnAmbientMote(mx, my, mz, moteColor);
+    }
 
     // 4. Update HUD
     hud.update(
@@ -303,12 +352,28 @@ function gameLoop(now: number): void {
   camState.tx += (targetCamX - camState.tx) * Math.min(1, dt * 6);
   camState.tz += (targetCamZ - camState.tz) * Math.min(1, dt * 6);
 
+  // Dynamic Screen Shake (Game Feel & Impact Juice)
+  let shakeX = 0;
+  let shakeY = 0;
+  let shakeZ = 0;
+
+  if (combat.shakeTrauma > 0) {
+    if (modals.settings.screenshake) {
+      const traumaSq = combat.shakeTrauma * combat.shakeTrauma;
+      const maxShake = 0.55;
+      shakeX = (Math.random() * 2 - 1) * maxShake * traumaSq;
+      shakeZ = (Math.random() * 2 - 1) * maxShake * traumaSq;
+      shakeY = (Math.random() * 2 - 1) * (maxShake * 0.35) * traumaSq;
+    }
+    combat.shakeTrauma = Math.max(0, combat.shakeTrauma - dt * 2.8);
+  }
+
   camera.position.set(
-    camState.tx,
-    camState.d * Math.sin(PITCH),
-    camState.tz + camState.d * Math.cos(PITCH)
+    camState.tx + shakeX,
+    camState.d * Math.sin(PITCH) + shakeY,
+    camState.tz + camState.d * Math.cos(PITCH) + shakeZ
   );
-  camera.lookAt(camState.tx, 0, camState.tz);
+  camera.lookAt(camState.tx + shakeX * 0.4, 0, camState.tz + shakeZ * 0.4);
 
   // Update particles and floating numbers
   particles.update(dt, window.innerWidth, window.innerHeight);

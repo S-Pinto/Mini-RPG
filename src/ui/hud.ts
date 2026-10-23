@@ -119,25 +119,33 @@ export class HudManager {
     }
   }
 
+  private lastAugmentCount = -1;
+
   private updateSkillInfo(player: Player): void {
-    if (player.classId === this.lastClassId) return;
+    if (player.classId === this.lastClassId && player.skillAugments.length === this.lastAugmentCount) return;
     this.lastClassId = player.classId;
+    this.lastAugmentCount = player.skillAugments.length;
 
     const cfg = CLASSES_DATA[player.classId];
     if (!cfg) return;
 
+    const s1Augs = player.getAugmentsFor('skill1');
+    const s2Augs = player.getAugmentsFor('skill2');
+    const s1Tag = s1Augs.length > 0 ? ` [${s1Augs[0].icon}]` : '';
+    const s2Tag = s2Augs.length > 0 ? ` [${s2Augs[0].icon}]` : '';
+
     // Desktop
     if (this.dskAttackName) this.dskAttackName.textContent = cfg.basicAttackName;
-    if (this.dskS1Icon) this.dskS1Icon.textContent = cfg.skill1.icon;
-    if (this.dskS2Icon) this.dskS2Icon.textContent = player.subclass.skill2.icon;
-    if (this.dskS1Name) this.dskS1Name.textContent = cfg.skill1.name;
-    if (this.dskS2Name) this.dskS2Name.textContent = player.subclass.skill2.name;
+    if (this.dskS1Icon) this.dskS1Icon.textContent = s1Augs.length > 0 ? s1Augs[0].icon : cfg.skill1.icon;
+    if (this.dskS2Icon) this.dskS2Icon.textContent = s2Augs.length > 0 ? s2Augs[0].icon : player.subclass.skill2.icon;
+    if (this.dskS1Name) this.dskS1Name.textContent = cfg.skill1.name + s1Tag;
+    if (this.dskS2Name) this.dskS2Name.textContent = player.subclass.skill2.name + s2Tag;
 
     // Mobile
-    if (this.mobS1Icon) this.mobS1Icon.textContent = cfg.skill1.icon;
-    if (this.mobS2Icon) this.mobS2Icon.textContent = player.subclass.skill2.icon;
-    if (this.mobS1Name) this.mobS1Name.textContent = cfg.skill1.name.substring(0, 7).toUpperCase();
-    if (this.mobS2Name) this.mobS2Name.textContent = player.subclass.skill2.name.substring(0, 7).toUpperCase();
+    if (this.mobS1Icon) this.mobS1Icon.textContent = s1Augs.length > 0 ? s1Augs[0].icon : cfg.skill1.icon;
+    if (this.mobS2Icon) this.mobS2Icon.textContent = s2Augs.length > 0 ? s2Augs[0].icon : player.subclass.skill2.icon;
+    if (this.mobS1Name) this.mobS1Name.textContent = (cfg.skill1.name + s1Tag).substring(0, 8).toUpperCase();
+    if (this.mobS2Name) this.mobS2Name.textContent = (player.subclass.skill2.name + s2Tag).substring(0, 8).toUpperCase();
   }
 
   public update(player: Player, currentRoom: DungeonRoom, allRooms: DungeonRoom[], zone: ZoneConfig, enemies: Enemy[]): void {

@@ -217,7 +217,7 @@ export interface DestructibleProp {
   id: number;
   x: number;
   y: number;
-  type: 'barrel' | 'pot' | 'chest' | 'shrine' | 'table' | 'chair' | 'crate' | 'teleport_pad' | 'shop_counter' | 'skill_crucible' | 'explosive_barrel' | 'toxic_barrel' | 'spike_trap' | 'cage' | 'pact_altar';
+  type: 'barrel' | 'pot' | 'chest' | 'shrine' | 'table' | 'chair' | 'crate' | 'teleport_pad' | 'shop_counter' | 'skill_crucible' | 'explosive_barrel' | 'toxic_barrel' | 'spike_trap' | 'cage' | 'pact_altar' | 'sarcophagus' | 'weapon_rack' | 'campfire' | 'fire_jet';
   hp: number;
   mesh?: any;
   opened?: boolean;

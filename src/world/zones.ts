@@ -26,9 +26,9 @@ export const ZONES: Record<ZoneId, ZoneConfig> = {
 
   elshiff: {
     id: 'elshiff',
-    name: 'Elshiff · La Città Elfica Abbandonata',
+    name: 'Ealscylf · La Città Elfica Abbandonata',
     subtitle: 'Antiche guglie di marmo bianco ora infestate da ombre e costrutti corrotti',
-    lore: 'Costruita secoli fa dagli elfi alti di Elanthria, Elshiff fu abbandonata dopo la caduta del velo magico. Tra le colonne di marmo e i rampicanti bioluminescenti vagano ora anime perdute e sentinelle meccaniche impazzite.',
+    lore: 'Costruita secoli fa dagli elfi alti di Elanthria, Ealscylf fu abbandonata dopo la caduta del velo magico. Tra le colonne di marmo e i rampicanti bioluminescenti vagano ora anime perdute e sentinelle meccaniche impazzite.',
     actNumber: 2,
     bossName: 'Regina Spettrale Vaeloria',
     bossType: 'boss_vaeloria',
@@ -68,9 +68,9 @@ export const ZONES: Record<ZoneId, ZoneConfig> = {
     id: 'vazark',
     name: 'Grotte di Vazark · La Tana del Drago',
     subtitle: 'Caverne vulcaniche sature di magma, koboldi fanatici e il drago antico',
-    lore: 'Nelle viscere della Montagna Vazark arde il fuoco primordiale. Tribù di koboldi verdi devoti al drago hanno eretto templi di teschi e oro grezzo per venerare il loro sovrano alato: l’Antico Drago Vermithrax.',
+    lore: 'Nelle viscere della Montagna Vazark arde il fuoco primordiale. Tribù di koboldi verdi devoti al drago hanno eretto templi di teschi e oro grezzo per venerare il loro sovrano alato: l’Antico Drago Khloron Goldenhorn, leggendario drago verde corazzato in oro.',
     actNumber: 4,
-    bossName: 'Vermithrax, Terrore di Elanthria',
+    bossName: 'Khloron Goldenhorn, Terrore di Elanthria',
     bossType: 'boss_dragon_vermithrax',
     wallColor: 0x5a2822,
     floorColorA: '#281210',

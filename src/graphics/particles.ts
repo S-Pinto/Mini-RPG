@@ -30,10 +30,22 @@ interface FloatingTextItem {
   maxLife: number;
 }
 
+interface AmbientMote {
+  mesh: THREE.Mesh;
+  vx: number;
+  vy: number;
+  vz: number;
+  life: number;
+  maxLife: number;
+  initialScale: number;
+  seed: number;
+}
+
 export class ParticleEngine {
   public group = new THREE.Group();
   private particles: Particle[] = [];
   private shockwaves: ShockwaveRing[] = [];
+  private ambientMotes: AmbientMote[] = [];
   private pool: THREE.Mesh[] = [];
   private floatingTexts: FloatingTextItem[] = [];
   private textContainer: HTMLElement | null = null;
@@ -87,14 +99,55 @@ export class ParticleEngine {
     });
   }
 
-  public spawnFloatingText(x: number, y: number, z: number, text: string, color = '#ffffff', isCrit = false): void {
+  public spawnAmbientMote(x: number, y: number, z: number, color: number): void {
+    if (this.ambientMotes.length >= 45) return;
+    const size = 0.08 + Math.random() * 0.08;
+    const mesh = new THREE.Mesh(GEO.sph, getBasic(color, 0.75, true));
+    mesh.scale.setScalar(size);
+    mesh.position.set(x, y, z);
+    this.group.add(mesh);
+
+    this.ambientMotes.push({
+      mesh,
+      vx: (Math.random() - 0.5) * 0.6,
+      vy: 0.35 + Math.random() * 0.45,
+      vz: (Math.random() - 0.5) * 0.6,
+      life: 0,
+      maxLife: 4.5 + Math.random() * 3.5,
+      initialScale: size,
+      seed: Math.random() * 50
+    });
+  }
+
+  public spawnFloatingText(
+    x: number,
+    y: number,
+    z: number,
+    text: string,
+    color = '#ffffff',
+    isCrit = false,
+    tier: 'small' | 'normal' | 'large' | 'epic' = 'normal',
+    duration?: number
+  ): void {
     if (!this.textContainer) return;
 
+    // Bulletproof: sanitize any accidental long decimal numbers in floating text
+    const sanitizedText = text.replace(/(\d+\.\d{3,})/g, (match) => {
+      const num = parseFloat(match);
+      return Number.isFinite(num) ? String(Math.round(num * 10) / 10) : match;
+    });
+
     const el = document.createElement('div');
-    el.className = `combat-text ${isCrit ? 'crit' : ''}`;
-    el.textContent = text;
+    el.className = `combat-text ${tier} ${isCrit ? 'crit' : ''}`;
+    el.textContent = sanitizedText;
     el.style.color = color;
     this.textContainer.appendChild(el);
+
+    let defaultLife = 0.85;
+    if (tier === 'small') defaultLife = 0.6;
+    else if (tier === 'large') defaultLife = 1.3;
+    else if (tier === 'epic') defaultLife = 1.75;
+    else if (isCrit) defaultLife = 1.15;
 
     this.floatingTexts.push({
       el,
@@ -102,11 +155,32 @@ export class ParticleEngine {
       y,
       z,
       life: 0,
-      maxLife: isCrit ? 1.1 : 0.85
+      maxLife: duration || defaultLife
     });
   }
 
   public update(dt: number, screenWidth: number, screenHeight: number): void {
+    // Update ambient drifting motes
+    const tSec = performance.now() * 0.001;
+    for (let i = this.ambientMotes.length - 1; i >= 0; i--) {
+      const m = this.ambientMotes[i];
+      m.life += dt;
+      if (m.life >= m.maxLife) {
+        this.group.remove(m.mesh);
+        m.mesh.geometry.dispose();
+        this.ambientMotes.splice(i, 1);
+        continue;
+      }
+      m.mesh.position.x += m.vx * dt + Math.sin(tSec * 1.5 + m.seed) * 0.012;
+      m.mesh.position.y += m.vy * dt;
+      m.mesh.position.z += m.vz * dt + Math.cos(tSec * 1.5 + m.seed) * 0.012;
+
+      const progress = m.life / m.maxLife;
+      const fade = Math.sin(progress * Math.PI);
+      const s = m.initialScale * (0.4 + 0.6 * fade);
+      m.mesh.scale.set(s, s, s);
+    }
+
     // Update individual particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
@@ -155,14 +229,17 @@ export class ParticleEngine {
           continue;
         }
 
-        this.projVec.set(ft.x, ft.y + ft.life * 1.5, ft.z);
+        const floatSpeed = ft.maxLife > 1.2 ? 1.05 : 1.5;
+        this.projVec.set(ft.x, ft.y + ft.life * floatSpeed, ft.z);
         this.projVec.project(this.camera);
 
         const screenX = (this.projVec.x * 0.5 + 0.5) * screenWidth;
         const screenY = (-this.projVec.y * 0.5 + 0.5) * screenHeight;
 
-        ft.el.style.transform = `translate(-50%, -50%) translate(${screenX}px, ${screenY}px)`;
-        const alpha = Math.min(1, (1 - ft.life / ft.maxLife) * 2);
+        const progress = ft.life / ft.maxLife;
+        const scale = progress < 0.16 ? 0.75 + (progress / 0.16) * 0.35 : (progress > 0.75 ? 1.0 - (progress - 0.75) * 0.35 : 1.0);
+        ft.el.style.transform = `translate(-50%, -50%) translate(${screenX}px, ${screenY}px) scale(${scale.toFixed(2)})`;
+        const alpha = Math.min(1, (1 - progress) * 2.2);
         ft.el.style.opacity = String(alpha);
       }
     }
@@ -183,6 +260,12 @@ export class ParticleEngine {
       ft.el.remove();
     }
     this.floatingTexts = [];
+
+    for (const m of this.ambientMotes) {
+      this.group.remove(m.mesh);
+      m.mesh.geometry.dispose();
+    }
+    this.ambientMotes = [];
   }
 }
 

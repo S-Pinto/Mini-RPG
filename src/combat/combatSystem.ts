@@ -23,7 +23,20 @@ export interface Projectile {
   isPlayer: boolean;
   color: number;
   pierce: number;
-  onHitEffect?: 'burn' | 'smite' | 'freeze';
+  bounces?: number;
+  onHitEffect?: 'burn' | 'smite' | 'freeze' | 'poison';
+}
+
+export interface LingeringZone {
+  x: number;
+  y: number;
+  radius: number;
+  timer: number;
+  tickTimer: number;
+  type: 'sanctuary' | 'burn_crater' | 'smoke_screen';
+  color: number;
+  damage?: number;
+  heal?: number;
 }
 
 export interface SlashEffect {
@@ -41,7 +54,14 @@ export class CombatSystem {
   public group = new THREE.Group();
   public projectiles: Projectile[] = [];
   public slashes: SlashEffect[] = [];
+  public lingeringZones: LingeringZone[] = [];
   public hitStopTimer = 0;
+  public shakeTrauma = 0;
+  public onPropDropItem?: (propType: 'sarcophagus' | 'weapon_rack', x: number, y: number) => void;
+
+  public addScreenShake(amount: number): void {
+    this.shakeTrauma = Math.min(1.0, this.shakeTrauma + amount);
+  }
 
   public triggerPropDestruction(pr: DestructibleProp, player: Player, enemies: Enemy[]): void {
     pr.hp = 0;
@@ -49,6 +69,7 @@ export class CombatSystem {
 
     if (pr.type === 'explosive_barrel') {
       sound.dragonRoar();
+      this.addScreenShake(0.65);
       particles.spawnShockwave(pr.x, pr.y, 5.0, 0xff4400, 0.4);
       particles.spawnBurst(pr.x, 1.0, pr.y, 45, 0xff5500, 10);
       particles.spawnFloatingText(pr.x, 2.2, pr.y, '💥 DEFLAGRAZIONE!', '#ff4400', true);
@@ -70,11 +91,13 @@ export class CombatSystem {
         const dmg = player.takeDamage(25);
         if (dmg > 0) {
           sound.playerHurt();
+          this.addScreenShake(0.35);
           particles.spawnFloatingText(player.x, 2.4, player.y, `-${dmg} ESPLOSIONE!`, '#ff2200', true);
         }
       }
     } else if (pr.type === 'toxic_barrel') {
       sound.heal();
+      this.addScreenShake(0.3);
       particles.spawnShockwave(pr.x, pr.y, 4.2, 0x22c55e, 0.4);
       particles.spawnBurst(pr.x, 1.0, pr.y, 35, 0x16a34a, 8);
       particles.spawnFloatingText(pr.x, 2.2, pr.y, '☣️ NUBE TOSSICA!', '#22c55e', true);
@@ -94,11 +117,39 @@ export class CombatSystem {
         const dmg = player.takeDamage(15);
         if (dmg > 0) {
           sound.playerHurt();
+          this.addScreenShake(0.25);
           particles.spawnFloatingText(player.x, 2.4, player.y, `-${dmg} VELENO!`, '#22c55e', true);
         }
       }
+    } else if (pr.type === 'sarcophagus') {
+      sound.heavyChop();
+      this.addScreenShake(0.35);
+      particles.spawnShockwave(pr.x, pr.y, 3.5, 0x93c5fd, 0.35);
+      particles.spawnBurst(pr.x, 0.8, pr.y, 28, 0x475569, 6);
+      particles.spawnFloatingText(pr.x, 2.2, pr.y, '⚰️ SARCOFAGO INFRANTO!', '#93c5fd', true);
+      player.gold += Math.floor(14 + Math.random() * 16);
+      sound.coin();
+      if (this.onPropDropItem) {
+        this.onPropDropItem('sarcophagus', pr.x, pr.y);
+      }
+    } else if (pr.type === 'weapon_rack') {
+      sound.breakProp();
+      this.addScreenShake(0.25);
+      particles.spawnBurst(pr.x, 0.8, pr.y, 22, 0xa0a8b4, 5);
+      particles.spawnFloatingText(pr.x, 2.0, pr.y, '⚔️ ARMERIA FORZATA!', '#cbd5e1', true);
+      player.gold += Math.floor(4 + Math.random() * 8);
+      sound.coin();
+      if (this.onPropDropItem) {
+        this.onPropDropItem('weapon_rack', pr.x, pr.y);
+      }
+    } else if (pr.type === 'campfire') {
+      sound.breakProp();
+      this.addScreenShake(0.15);
+      particles.spawnBurst(pr.x, 0.4, pr.y, 18, 0xff5500, 3);
+      particles.spawnFloatingText(pr.x, 1.8, pr.y, 'Falò Spento', '#ea580c');
     } else {
       sound.breakProp();
+      this.addScreenShake(0.08);
       particles.spawnBurst(pr.x, 0.6, pr.y, 14, 0x8a5438, 4);
       player.gold += Math.floor(1 + Math.random() * 4);
       sound.coin();
@@ -227,7 +278,7 @@ export class CombatSystem {
     player.attackCd = player.stats.attackDelay;
 
     const classId = player.classId;
-    const isCrit = Math.random() * 100 < player.stats.critChance;
+    const isCrit = (player.flurryCritTimer > 0) || (Math.random() * 100 < player.stats.critChance);
     const critMult = isCrit ? player.stats.critDamage / 100 : 1.0;
     const baseDamage = Math.round(player.stats.damage * critMult);
 
@@ -336,11 +387,22 @@ export class CombatSystem {
             if (player.isSmiteCharged) {
               dmg = Math.round(dmg * 2.6);
               sound.smite();
+              this.addScreenShake(0.42);
               particles.spawnShockwave(e.x, e.y, 4.0, 0xffea00);
               particles.spawnBurst(e.x, 1.2, e.y, 25, 0xffd700, 8);
-              player.isSmiteCharged = false;
+              if (player.hasAugment('pal_smite_double_charge')) {
+                player.skillCharges['smite'] = (player.skillCharges['smite'] || 2) - 1;
+                if (player.skillCharges['smite'] <= 0) {
+                  player.isSmiteCharged = false;
+                } else {
+                  particles.spawnFloatingText(player.x, 2.2, player.y, 'PUNIZIONE: 1 CARICA RIMASTA!', '#ffea00');
+                }
+              } else {
+                player.isSmiteCharged = false;
+              }
             } else {
               sound.hitEnemy();
+              this.addScreenShake(isCrit ? 0.28 : (step === 2 ? 0.16 : 0.08));
               particles.spawnBurst(e.x, 1.0, e.y, 8, isCrit ? 0xffd700 : 0xffffff, 5);
             }
 
@@ -363,7 +425,7 @@ export class CombatSystem {
 
       // Check destructible props in range
       for (const p of room.props) {
-        if (p.hp <= 0) continue;
+        if (p.hp <= 0 || p.type === 'chest' || p.type === 'shrine' || p.type === 'shop_counter' || p.type === 'teleport_pad' || p.type === 'skill_crucible' || p.type === 'pact_altar' || p.type === 'cage' || p.type === 'spike_trap' || p.type === 'fire_jet') continue;
         const dx = p.x - player.x;
         const dy = p.y - player.y;
         if (Math.hypot(dx, dy) <= reach + 0.8) {
@@ -494,8 +556,8 @@ export class CombatSystem {
         // Augment: Comete Orbitanti (spawns 2 circling flame orbs)
         if (player.hasAugment('wiz_fireball_orbit')) {
           player.activeOrbs.push(
-            { angle: 0, radius: 2.2, timer: 10, color: 0xff4400, damage: Math.round(player.stats.damage * 1.4) },
-            { angle: Math.PI, radius: 2.2, timer: 10, color: 0xff4400, damage: Math.round(player.stats.damage * 1.4) }
+            { angle: 0, radius: 2.2, timer: 10, color: 0xff4400, damage: Math.round(player.stats.damage * 1.4), hitCooldown: 0 },
+            { angle: Math.PI, radius: 2.2, timer: 10, color: 0xff4400, damage: Math.round(player.stats.damage * 1.4), hitCooldown: 0 }
           );
           particles.spawnBurst(player.x, 1.2, player.y, 25, 0xff6600, 7);
           particles.spawnFloatingText(player.x, 2.5, player.y, '🔥 COMETE ORBITANTI!', '#ff6600', true);
@@ -508,6 +570,19 @@ export class CombatSystem {
         const dmg = Math.round(player.stats.damage * (isAoe ? 4.5 : 3.2));
         const pierce = isBounce ? 2 : 0;
 
+        if (isAoe) {
+          this.lingeringZones.push({
+            x: player.x + player.aimX * 4.5,
+            y: player.y + player.aimY * 4.5,
+            radius: 3.5,
+            timer: 4.0,
+            tickTimer: 0.4,
+            type: 'burn_crater',
+            color: 0xff4400,
+            damage: Math.round(player.stats.damage * 0.75)
+          });
+        }
+
         this.spawnProjectile(
           player.x + player.aimX * 1.0,
           player.y + player.aimY * 1.0,
@@ -518,7 +593,8 @@ export class CombatSystem {
           true,
           0xff4400,
           pierce,
-          'burn'
+          'burn',
+          isBounce ? 2 : 0
         );
         break;
       }
@@ -595,6 +671,7 @@ export class CombatSystem {
           }
         }
 
+        const hasPoison = player.hasAugment('rog_backstab_poison');
         const isTriple = player.hasAugment('rog_backstab_triple');
         const count = isTriple ? 8 : 5;
         const fanSpread = isTriple ? 0.75 : 0.5;
@@ -612,8 +689,9 @@ export class CombatSystem {
             0.22,
             Math.round(player.stats.damage * (isTriple ? 2.2 : 1.8)),
             true,
-            0x44d98a,
-            isTriple ? 3 : 2
+            hasPoison ? 0x22cc55 : 0x44d98a,
+            isTriple ? 3 : 2,
+            hasPoison ? 'poison' : undefined
           );
         }
         break;
@@ -630,9 +708,9 @@ export class CombatSystem {
         // Augment: Globi di Grazia Orbitanti (3 holy orbs)
         if (player.hasAugment('clr_flame_orbs')) {
           player.activeOrbs.push(
-            { angle: 0, radius: 2.2, timer: 12, color: 0xffea00, damage: Math.round(player.stats.damage * 1.3) },
-            { angle: (Math.PI * 2) / 3, radius: 2.2, timer: 12, color: 0xffea00, damage: Math.round(player.stats.damage * 1.3) },
-            { angle: (Math.PI * 4) / 3, radius: 2.2, timer: 12, color: 0xffea00, damage: Math.round(player.stats.damage * 1.3) }
+            { angle: 0, radius: 2.2, timer: 12, color: 0xffea00, damage: Math.round(player.stats.damage * 1.3), hitCooldown: 0, isHealing: true, healTick: 0 },
+            { angle: (Math.PI * 2) / 3, radius: 2.2, timer: 12, color: 0xffea00, damage: Math.round(player.stats.damage * 1.3), hitCooldown: 0, isHealing: true, healTick: 0 },
+            { angle: (Math.PI * 4) / 3, radius: 2.2, timer: 12, color: 0xffea00, damage: Math.round(player.stats.damage * 1.3), hitCooldown: 0, isHealing: true, healTick: 0 }
           );
           particles.spawnBurst(player.x, 1.2, player.y, 25, 0xffea00, 7);
           particles.spawnFloatingText(player.x, 2.5, player.y, '🌟 GLOBI DI GRAZIA!', '#ffea00', true);
@@ -769,7 +847,8 @@ export class CombatSystem {
               Math.round(player.stats.damage * 1.6),
               true,
               0x00e5ff,
-              2
+              2,
+              'freeze'
             );
           }
         }
@@ -844,10 +923,11 @@ export class CombatSystem {
         this.spawnSlashArc(player.x, player.y, 0, 4.2, 0xff4444);
         particles.spawnBurst(player.x, 0.8, player.y, 22, 0xff3355, 7);
 
-        // Augment: Frenesia dei Critici (+50 crit chance burst)
+        // Augment: Frenesia dei Critici (100% crit chance for 4s)
         if (player.hasAugment('fgt_flurry_crit')) {
+          player.flurryCritTimer = 4.0;
           player.invulnerableTimer = 0.8;
-          particles.spawnFloatingText(player.x, 2.5, player.y, '🩸 FRENESIA CRITICA!', '#ff2244');
+          particles.spawnFloatingText(player.x, 2.5, player.y, '🩸 FRENESIA DEI CRITICI (4s)!', '#ff2244', true);
         }
 
         for (const e of enemies) {
@@ -945,6 +1025,21 @@ export class CombatSystem {
         particles.spawnBurst(player.x, 1.2, player.y, 25, 0x88ffaa, 6);
         particles.spawnFloatingText(player.x, 2.4, player.y, `💖 +${healed} PV`, '#55ff77', true);
 
+        if (isSanctuary) {
+          this.lingeringZones.push({
+            x: player.x,
+            y: player.y,
+            radius: 4.8,
+            timer: 6.0,
+            tickTimer: 0.6,
+            type: 'sanctuary',
+            color: 0x55ff77,
+            heal: 14,
+            damage: Math.round(player.stats.damage * 0.8)
+          });
+          particles.spawnFloatingText(player.x, 2.7, player.y, '🌿 SANTUARIO VIVENTE ATTIVO!', '#55ff77', true);
+        }
+
         for (const e of enemies) {
           if (e.isDead) continue;
           const dx = e.x - player.x;
@@ -998,6 +1093,7 @@ export class CombatSystem {
       const dmg = player.takeDamage(rawDmg);
       if (dmg > 0) {
         sound.playerHurt();
+        this.addScreenShake(isCrit ? 0.35 : 0.22);
         particles.spawnFloatingText(player.x, 2.2, player.y, label ? `-${dmg} ${label}` : `-${dmg}`, '#ff3b30', isCrit);
         if (e.stats.affix === 'vampiric') {
           const healAmt = Math.round(dmg * 0.65);
@@ -1151,7 +1247,7 @@ export class CombatSystem {
       return;
     }
 
-    // Boss 4: Vermithrax, Terrore di Elanthria (4 Distinct Attack Patterns)
+    // Boss 4: Khloron Goldenhorn, Terrore di Elanthria (4 Distinct Attack Patterns)
     if (e.type === 'boss_dragon_vermithrax') {
       const pattern = e.attackCount % 4;
 
@@ -1334,7 +1430,8 @@ export class CombatSystem {
     isPlayer: boolean,
     color: number,
     pierce = 0,
-    onHitEffect?: 'burn' | 'smite' | 'freeze'
+    onHitEffect?: 'burn' | 'smite' | 'freeze' | 'poison',
+    bounces = 0
   ): Projectile {
     const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 8, 8), getBasic(color));
     mesh.position.set(x, 1.1, y);
@@ -1352,6 +1449,7 @@ export class CombatSystem {
       isPlayer,
       color,
       pierce,
+      bounces,
       onHitEffect
     };
 
@@ -1363,20 +1461,81 @@ export class CombatSystem {
     // 0. Update Active Player Orbiting Spheres (Fire & Holy Orbs from Skill Augments)
     if (player.activeOrbs && player.activeOrbs.length > 0) {
       for (const orb of player.activeOrbs) {
+        if (orb.hitCooldown !== undefined && orb.hitCooldown > 0) {
+          orb.hitCooldown -= dt;
+        }
+        if (orb.isHealing) {
+          orb.healTick = (orb.healTick || 0) + dt;
+          if (orb.healTick >= 1.2) {
+            orb.healTick = 0;
+            const healed = player.heal(4);
+            if (healed > 0) {
+              particles.spawnFloatingText(player.x, 2.2, player.y, `+${healed} GRAZIA`, '#ffea00');
+            }
+          }
+        }
         const ox = player.x + Math.cos(orb.angle) * orb.radius;
         const oy = player.y + Math.sin(orb.angle) * orb.radius;
-        if (Math.random() < 0.35) {
-          particles.spawnBurst(ox, 1.1, oy, 1, orb.color, 2);
+        if (Math.random() < 0.25) {
+          particles.spawnBurst(ox, 1.1, oy, 1, orb.color, 1.8);
         }
         for (const e of enemies) {
           if (e.isDead) continue;
           if (Math.hypot(e.x - ox, e.y - oy) < e.stats.radius + 0.45) {
-            e.takeDamage(orb.damage, Math.cos(orb.angle), Math.sin(orb.angle), 6);
-            particles.spawnBurst(e.x, 1.1, e.y, 6, orb.color, 4);
-            particles.spawnFloatingText(e.x, 2.0, e.y, `${orb.damage}`, '#ffea00');
-            sound.hitEnemy();
+            if (!orb.hitCooldown || orb.hitCooldown <= 0) {
+              orb.hitCooldown = 0.35; // Throttle hits to max ~3 per second
+              e.takeDamage(orb.damage, Math.cos(orb.angle), Math.sin(orb.angle), 6);
+              particles.spawnBurst(e.x, 1.1, e.y, 6, orb.color, 4);
+              particles.spawnFloatingText(e.x, 2.0, e.y, `${orb.damage}`, '#ffea00');
+              sound.hitEnemy();
+              if (orb.color === 0xff4400) {
+                e.applyStatusEffect('burn', 2.5, 4);
+              }
+            }
           }
         }
+      }
+    }
+
+    // 0b. Update Lingering Zones (Healing Sanctuary, Burning Craters, Smoke Screens)
+    for (let i = this.lingeringZones.length - 1; i >= 0; i--) {
+      const z = this.lingeringZones[i];
+      z.timer -= dt;
+      z.tickTimer -= dt;
+      if (Math.random() < 0.3) {
+        const rx = z.x + (Math.random() - 0.5) * z.radius * 1.6;
+        const ry = z.y + (Math.random() - 0.5) * z.radius * 1.6;
+        particles.spawnBurst(rx, 0.3, ry, 1, z.color, 1.5);
+      }
+      if (z.tickTimer <= 0) {
+        z.tickTimer = 0.6;
+        if (z.type === 'sanctuary') {
+          if (Math.hypot(player.x - z.x, player.y - z.y) <= z.radius) {
+            const healed = player.heal(z.heal || 12);
+            if (healed > 0) {
+              particles.spawnFloatingText(player.x, 2.2, player.y, `+${healed} SANTUARIO`, '#55ff77');
+            }
+          }
+          for (const e of enemies) {
+            if (e.isDead) continue;
+            if (Math.hypot(e.x - z.x, e.y - z.y) <= z.radius) {
+              e.takeDamage(z.damage || 14, e.x - z.x, e.y - z.y, 2);
+              particles.spawnFloatingText(e.x, 1.8, e.y, `☀️ ${z.damage || 14}`, '#ffea00');
+            }
+          }
+        } else if (z.type === 'burn_crater') {
+          for (const e of enemies) {
+            if (e.isDead) continue;
+            if (Math.hypot(e.x - z.x, e.y - z.y) <= z.radius) {
+              e.takeDamage(z.damage || 12, e.x - z.x, e.y - z.y, 2);
+              e.applyStatusEffect('burn', 3.0, 5);
+              particles.spawnFloatingText(e.x, 1.8, e.y, `🔥 ${z.damage || 12}`, '#ff4400');
+            }
+          }
+        }
+      }
+      if (z.timer <= 0) {
+        this.lingeringZones.splice(i, 1);
       }
     }
 
@@ -1410,12 +1569,37 @@ export class CombatSystem {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
 
-      if (p.life <= 0 || dungeon.isBlocked(room, p.x, p.y, p.radius)) {
+      if (p.life <= 0) {
         particles.spawnBurst(p.x, 1.1, p.y, 4, p.color, 3);
         this.group.remove(p.mesh);
         p.mesh.geometry.dispose();
         this.projectiles.splice(i, 1);
         continue;
+      }
+
+      if (dungeon.isBlocked(room, p.x, p.y, p.radius)) {
+        if (p.bounces && p.bounces > 0) {
+          p.bounces--;
+          // Calculate bounce reflection against blocked wall
+          const prevX = p.x - p.vx * dt;
+          const prevY = p.y - p.vy * dt;
+          const blockedX = dungeon.isBlocked(room, p.x, prevY, p.radius);
+          const blockedY = dungeon.isBlocked(room, prevX, p.y, p.radius);
+          if (blockedX) p.vx = -p.vx;
+          if (blockedY) p.vy = -p.vy;
+          if (!blockedX && !blockedY) { p.vx = -p.vx; p.vy = -p.vy; }
+          p.x = prevX + p.vx * dt;
+          p.y = prevY + p.vy * dt;
+          sound.fireball();
+          particles.spawnShockwave(p.x, p.y, 2.8, 0xff7722, 0.25);
+          particles.spawnBurst(p.x, 1.1, p.y, 10, p.color, 4);
+        } else {
+          particles.spawnBurst(p.x, 1.1, p.y, 4, p.color, 3);
+          this.group.remove(p.mesh);
+          p.mesh.geometry.dispose();
+          this.projectiles.splice(i, 1);
+          continue;
+        }
       }
 
       p.mesh.position.set(p.x, 1.1, p.y);
@@ -1425,7 +1609,7 @@ export class CombatSystem {
         let propHit = false;
         if (room && room.props) {
           for (const pr of room.props) {
-            if (pr.hp <= 0 || !pr.mesh || pr.type === 'chest' || pr.type === 'shrine' || pr.type === 'shop_counter' || pr.type === 'teleport_pad' || pr.type === 'skill_crucible' || pr.type === 'pact_altar' || pr.type === 'cage' || pr.type === 'spike_trap') continue;
+            if (pr.hp <= 0 || !pr.mesh || pr.type === 'chest' || pr.type === 'shrine' || pr.type === 'shop_counter' || pr.type === 'teleport_pad' || pr.type === 'skill_crucible' || pr.type === 'pact_altar' || pr.type === 'cage' || pr.type === 'spike_trap' || pr.type === 'fire_jet') continue;
             if (Math.hypot(pr.x - p.x, pr.y - p.y) <= 0.8 + p.radius) {
               pr.hp -= p.damage;
               if (pr.hp <= 0) {
@@ -1452,6 +1636,15 @@ export class CombatSystem {
 
             if (p.onHitEffect === 'burn') {
               particles.spawnShockwave(p.x, p.y, 3.5, 0xff4400);
+              e.applyStatusEffect('burn', 4.0, Math.max(3, Math.round(p.damage * 0.15)));
+            } else if (p.onHitEffect === 'freeze') {
+              e.applyStatusEffect('freeze', 3.5);
+              particles.spawnBurst(p.x, 1.1, p.y, 10, 0x88eeff, 4);
+              particles.spawnFloatingText(e.x, 2.2, e.y, '❄️ CONGELATO!', '#88eeff');
+            } else if (p.onHitEffect === 'poison') {
+              e.applyStatusEffect('poison', 4.5, Math.max(3, Math.round(p.damage * 0.20)));
+              particles.spawnBurst(p.x, 1.1, p.y, 10, 0x44dd44, 4);
+              particles.spawnFloatingText(e.x, 2.0, e.y, '☠️ AVVELENATO!', '#44dd44');
             }
 
             e.takeDamage(p.damage, p.vx, p.vy, 8);
@@ -1494,6 +1687,7 @@ export class CombatSystem {
       this.group.remove(s.mesh);
     }
     this.slashes = [];
+    this.lingeringZones = [];
   }
 }
 

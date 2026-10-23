@@ -92,14 +92,14 @@ export const BESTIARY_DATA: BestiaryEntry[] = [
   },
   {
     id: 'boss_dragon_vermithrax',
-    name: 'Vermithrax l’Antico Drago',
+    name: 'Khloron Goldenhorn',
     act: 'Atto 4 · SIGILLO SUPREMO',
     icon: '🐉',
     hp: 680,
     damage: 38,
     type: 'Boss Supremo',
-    weakness: 'Schivare l’alito conico e colpire la coda tra un ruggito e l’altro',
-    description: 'La creatura primeva che tiene in scacco l’isola di Okkarn. Scatena fiammate coniche, piogge di meteoriti e onde telluriche.'
+    weakness: 'Schivare l’alito conico e colpire le giunture della corazza d’oro tra un ruggito e l’altro',
+    description: 'Il maestoso drago verde primordiale dalle corna splendenti e corazzato con pesanti piastre d’oro battuto. Scatena fiammate coniche, piogge di meteoriti e onde telluriche.'
   }
 ];
 

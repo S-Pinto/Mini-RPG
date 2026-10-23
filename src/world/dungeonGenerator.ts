@@ -519,6 +519,56 @@ export class DungeonGenerator {
         trapActive: false
       });
 
+      // Fire Jet Trap Hazard (50% chance, or higher in fiery/dangerous rooms)
+      if (Math.random() < 0.55) {
+        const fireSpot = this.findFreeSpot(r, tSpot.x, tSpot.y, 2.8);
+        r.props.push({
+          id: ++propSeq,
+          x: fireSpot.x,
+          y: fireSpot.y,
+          type: 'fire_jet',
+          hp: 9999,
+          trapTimer: Math.random() * 3.2,
+          trapActive: false
+        });
+      }
+
+      // Sarcophagus (Crypts, catacombs, or 40% chance in any room)
+      if (r.shape === 'twin_crypts' || r.shape === 'winding_catacombs' || Math.random() < 0.4) {
+        const sarcSpot = this.findFreeSpot(r, tSpot.x, tSpot.y, 3.2);
+        r.props.push({
+          id: ++propSeq,
+          x: sarcSpot.x,
+          y: sarcSpot.y,
+          type: 'sarcophagus',
+          hp: 35
+        });
+      }
+
+      // Weapon Rack (Pillared halls, courtyards, or 45% chance in any room)
+      if (r.shape === 'pillared_halls' || r.shape === 'split_courtyard' || Math.random() < 0.45) {
+        const rackSpot = this.findFreeSpot(r, tSpot.x, tSpot.y, 3.0);
+        r.props.push({
+          id: ++propSeq,
+          x: rackSpot.x,
+          y: rackSpot.y,
+          type: 'weapon_rack',
+          hp: 25
+        });
+      }
+
+      // Cozy Campfire (occasional adventurer campsite in courtyards or sanctuaries)
+      if ((r.shape === 'split_courtyard' || r.shape === 'quadrant_sanctuary') && Math.random() < 0.3) {
+        const campSpot = this.findFreeSpot(r, tSpot.x, tSpot.y, 3.5);
+        r.props.push({
+          id: ++propSeq,
+          x: campSpot.x,
+          y: campSpot.y,
+          type: 'campfire',
+          hp: 30
+        });
+      }
+
       // 3. Captive Ally Cage (guaranteed once per floor)
       if (withCage) {
         const cageSpot = this.findFreeSpot(r, tSpot.x, tSpot.y, 3.5);
@@ -553,29 +603,79 @@ export class DungeonGenerator {
       return this.floorTextureCache.get(zone.id)!;
     }
 
+    const TILE_PX = 64;
     const canvas = document.createElement('canvas');
-    canvas.width = ROOM_WIDTH * 32;
-    canvas.height = ROOM_HEIGHT * 32;
+    canvas.width = ROOM_WIDTH * TILE_PX;
+    canvas.height = ROOM_HEIGHT * TILE_PX;
     const ctx = canvas.getContext('2d')!;
 
     for (let y = 0; y < ROOM_HEIGHT; y++) {
       for (let x = 0; x < ROOM_WIDTH; x++) {
-        ctx.fillStyle = (x + y) % 2 === 0 ? zone.floorColorA : zone.floorColorB;
-        ctx.fillRect(x * 32, y * 32, 32, 32);
+        const ox = x * TILE_PX;
+        const oy = y * TILE_PX;
 
-        // Flagstone mortar lines
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
-        ctx.fillRect(x * 32, y * 32, 32, 2);
-        ctx.fillRect(x * 32, y * 32, 2, 32);
+        // Base flagstone color with checker nuance
+        const baseColor = (x + y) % 2 === 0 ? zone.floorColorA : zone.floorColorB;
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(ox, oy, TILE_PX, TILE_PX);
 
-        for (let k = 0; k < 4; k++) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-          ctx.fillRect(x * 32 + Math.random() * 28, y * 32 + Math.random() * 28, 2 + Math.random() * 3, 2);
+        // 4 sub-slabs per tile with interlocking offset
+        const subW = TILE_PX / 2;
+        const subH = TILE_PX / 2;
+        for (let sy = 0; sy < 2; sy++) {
+          for (let sx = 0; sx < 2; sx++) {
+            const bx = ox + sx * subW;
+            const by = oy + sy * subH;
+
+            // Flagstone slab surface nuance
+            const noise = (Math.sin(x * 12.5 + sx * 7 + y * 9.2 + sy * 3) + 1) * 0.5;
+            ctx.fillStyle = noise > 0.6 ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)';
+            ctx.fillRect(bx + 1, by + 1, subW - 2, subH - 2);
+
+            // Bevel highlights & shadow edges
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.fillRect(bx + 1, by + 1, subW - 2, 1);
+            ctx.fillRect(bx + 1, by + 1, 1, subH - 2);
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+            ctx.fillRect(bx + 1, by + subH - 2, subW - 2, 1);
+            ctx.fillRect(bx + subW - 2, by + 1, 1, subH - 2);
+
+            // Deep mortar groove
+            ctx.strokeStyle = 'rgba(6, 4, 10, 0.65)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(bx + 0.5, by + 0.5, subW - 1, subH - 1);
+          }
+        }
+
+        // Ancient weathering stone crack / lichen on rare slabs
+        const slabSeed = (x * 37 + y * 19) % 11;
+        if (slabSeed === 0) {
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(ox + 12, oy + 8);
+          ctx.lineTo(ox + 22, oy + 26);
+          ctx.lineTo(ox + 35, oy + 32);
+          ctx.stroke();
+        } else if (slabSeed === 3 && zone.id === 'morgen') {
+          // Moss spot
+          ctx.fillStyle = 'rgba(34, 120, 60, 0.22)';
+          ctx.beginPath();
+          ctx.arc(ox + 32, oy + 32, 10, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (slabSeed === 5 && zone.id === 'elshiff') {
+          // Faint glowing arcane rune mark
+          ctx.fillStyle = 'rgba(0, 240, 255, 0.15)';
+          ctx.beginPath();
+          ctx.arc(ox + 32, oy + 32, 6, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
     }
 
     const tex = new THREE.CanvasTexture(canvas);
+    tex.anisotropy = 4;
     this.floorTextureCache.set(zone.id, tex);
     return tex;
   }
@@ -587,11 +687,16 @@ export class DungeonGenerator {
     r.bars = [];
     r.torches = [];
 
-    // Floor Mesh
-    const floorMat = new THREE.MeshLambertMaterial({ map: this.getFloorTexture(zone) });
+    // Floor Mesh with Physically-Based Rendering & Shadows
+    const floorMat = new THREE.MeshStandardMaterial({
+      map: this.getFloorTexture(zone),
+      roughness: 0.85,
+      metalness: 0.12
+    });
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W, WORLD_H), floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(WORLD_W / 2, 0, WORLD_H / 2);
+    floor.receiveShadow = true;
     roomGroup.add(floor);
 
     const wallMat = getLambert(zone.wallColor);
@@ -611,18 +716,31 @@ export class DungeonGenerator {
           const wall = new THREE.Mesh(GEO.box, wallMat);
           wall.position.set(cx, wallHeight / 2, cz);
           wall.scale.set(TILE_SIZE, wallHeight, TILE_SIZE);
+          wall.castShadow = true;
+          wall.receiveShadow = true;
           roomGroup.add(wall);
 
           const topCap = new THREE.Mesh(GEO.box, topMat);
           topCap.position.set(cx, wallHeight + 0.05, cz);
           topCap.scale.set(TILE_SIZE + 0.05, 0.1, TILE_SIZE + 0.05);
+          topCap.castShadow = true;
+          topCap.receiveShadow = true;
           roomGroup.add(topCap);
         } else if (tileVal === 2) {
-          // Ancient broken pillar / rock
+          // Ancient sculpted broken pillar / column
           const pillar = new THREE.Mesh(GEO.cyl, wallMat);
           pillar.position.set(cx, 1.1, cz);
           pillar.scale.set(0.85, 2.2, 0.85);
-          roomGroup.add(pillar);
+          pillar.castShadow = true;
+          pillar.receiveShadow = true;
+
+          const cap = new THREE.Mesh(GEO.box, topMat);
+          cap.scale.set(1.15, 0.22, 1.15);
+          cap.position.set(cx, 2.2, cz);
+          cap.castShadow = true;
+          cap.receiveShadow = true;
+
+          roomGroup.add(pillar, cap);
         }
       }
     }
@@ -643,15 +761,19 @@ export class DungeonGenerator {
       const archL = new THREE.Mesh(GEO.box, wallMat);
       archL.scale.set(0.3, 3.2, 0.3);
       archL.position.set(-1.1, 1.6, 0);
+      archL.castShadow = true;
+      archL.receiveShadow = true;
+
       const archR = archL.clone();
       archR.position.x = 1.1;
+
       const archTop = new THREE.Mesh(GEO.box, topMat);
       archTop.scale.set(2.5, 0.4, 0.4);
       archTop.position.set(0, 3.2, 0);
+      archTop.castShadow = true;
+      archTop.receiveShadow = true;
 
-      doorGroup.add(archL);
-      doorGroup.add(archR);
-      doorGroup.add(archTop);
+      doorGroup.add(archL, archR, archTop);
 
       // Gate Bars that drop when room is not cleared
       const barsGroup = new THREE.Group();
@@ -659,13 +781,14 @@ export class DungeonGenerator {
         const bar = new THREE.Mesh(GEO.cyl, getLambert(0x4a4456));
         bar.scale.set(0.08, 2.8, 0.08);
         bar.position.set(-0.8 + i * 0.4, 1.4, 0);
+        bar.castShadow = true;
         barsGroup.add(bar);
       }
       barsGroup.visible = !r.cleared;
       doorGroup.add(barsGroup);
       r.bars.push(barsGroup);
 
-      // Portal color indicator
+      // Portal color indicator & ambient portal light
       let portalColor = 0xa899cc;
       if (targetRoom.type === 'boss') portalColor = 0xff3355;
       else if (targetRoom.type === 'treasure') portalColor = 0xffd700;
@@ -674,16 +797,20 @@ export class DungeonGenerator {
       const portalLight = new THREE.Mesh(GEO.sph, getBasic(portalColor));
       portalLight.scale.set(0.25, 0.25, 0.25);
       portalLight.position.set(0, 3.5, 0);
-      doorGroup.add(portalLight);
 
+      const pLight = new THREE.PointLight(portalColor, 0.7, 7, 1.6);
+      pLight.position.set(0, 3.2, 0);
+
+      doorGroup.add(portalLight, pLight);
       roomGroup.add(doorGroup);
     }
 
-    // Torches
+    // Wall Sconces & Flickering Torch Lights
     for (const tx of [4, 10, 20, 26]) {
       const sconce = new THREE.Mesh(GEO.box, getLambert(0x382c22));
       sconce.scale.set(0.14, 0.6, 0.14);
       sconce.position.set(tx, 2.2, TILE_SIZE + 0.1);
+      sconce.castShadow = true;
       roomGroup.add(sconce);
 
       const flame = new THREE.Mesh(GEO.cone, getBasic(zone.torchColor));
@@ -691,6 +818,10 @@ export class DungeonGenerator {
       flame.position.set(tx, 2.65, TILE_SIZE + 0.1);
       roomGroup.add(flame);
       r.torches.push(flame);
+
+      const torchLight = new THREE.PointLight(zone.torchColor, 0.85, 9, 1.8);
+      torchLight.position.set(tx, 2.8, TILE_SIZE + 0.35);
+      roomGroup.add(torchLight);
     }
 
     // Build 3D models for Props

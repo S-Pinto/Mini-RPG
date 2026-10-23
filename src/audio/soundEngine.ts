@@ -200,6 +200,15 @@ class SoundEngine {
     this.playTone(293.66, 0.25, 'triangle', 0.1, 440);
   }
 
+  public legendaryDrop(): void {
+    // Ethereal crystalline fanfare for Epic and Legendary loot beams
+    const notes = [587.33, 880, 1174.66, 1760, 2349.32]; // D5, A5, D6, A6, D7
+    notes.forEach((f, i) => {
+      this.playTone(f, 0.45, 'sine', 0.12, f * 1.02, i * 0.065);
+      this.playTone(f * 0.5, 0.35, 'triangle', 0.08, undefined, i * 0.065);
+    });
+  }
+
   // --- Procedural Dungeon Synth Music ---
   // Mode: D Dorian / Minor D&D Adventure scale
   public startDungeonMusic(): void {

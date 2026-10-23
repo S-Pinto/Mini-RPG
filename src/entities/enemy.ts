@@ -64,9 +64,9 @@ const ENEMY_BASE_STATS: Record<EnemyType, EnemyStats> = {
     isBoss: true
   },
 
-  // Elshiff
+  // Ealscylf
   elven_shadow: {
-    name: 'Ombra di Elshiff',
+    name: 'Ombra di Ealscylf',
     hp: 60,
     maxHp: 60,
     damage: 22,
@@ -215,14 +215,14 @@ const ENEMY_BASE_STATS: Record<EnemyType, EnemyStats> = {
     attackType: 'projectile'
   },
   boss_dragon_vermithrax: {
-    name: 'Vermithrax, Terrore di Elanthria',
+    name: 'Khloron Goldenhorn, Terrore di Elanthria',
     hp: 1650,
     maxHp: 1650,
     damage: 54,
     speed: 2.5,
     radius: 2.0,
     xpReward: 750,
-    color: 0x8a1c14,
+    color: 0x2d6a4f,
     attackRange: 9.5,
     attackCooldown: 1.9,
     attackType: 'dragon_breath',

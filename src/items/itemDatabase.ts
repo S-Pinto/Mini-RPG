@@ -38,11 +38,11 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
       'Bastone dell’Arcimago',
       'Bacchetta di Cristallo & Tomo Antico',
       'Verga del Fuoco Arcano',
-      'Scettro della Trama di Elshiff',
+      'Scettro della Trama di Ealscylf',
       'Bastone delle Tempeste Astrali'
     ],
     armor: [
-      'Veste della Trama di Elshiff',
+      'Veste della Trama di Ealscylf',
       'Tonaca della Meditazione Arcana',
       'Mantello del Mago Guerriero',
       'Robe Tessute di Stelle'
@@ -60,7 +60,7 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
     relic: [
       'Grimorio delle Fiamme Antiche',
       'Pietra di Ioun dell’Intelletto',
-      'Tomo Proibito di Elshiff'
+      'Tomo Proibito di Ealscylf'
     ]
   },
   fighter: {
@@ -165,7 +165,7 @@ const CLASS_BASE_NAMES: Record<ClassId, Record<ItemSlot, string[]>> = {
       'Sigillo della Vita Rinnovata'
     ],
     relic: [
-      'Icona Sacra di Elshiff',
+      'Icona Sacra di Ealscylf',
       'Calice Benedetto delle Anime Salve'
     ]
   }
@@ -186,7 +186,7 @@ const DND_AFFIX_SUFFIXES: Record<string, string> = {
 };
 
 const LEGENDARY_TITLES = [
-  'di Vermithrax il Terrore',
+  'di Khloron Goldenhorn',
   'della Regina Vaeloria',
   'dei Renegades di Okkarn',
   'dell’Antica Elanthria',
