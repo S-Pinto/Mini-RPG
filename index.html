@@ -14,6 +14,16 @@
     href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=MedievalSharp&family=Outfit:wght@400;600;700&display=swap"
     rel="stylesheet">
   <link rel="stylesheet" href="/src/style.css">
+  <script>
+    window.addEventListener('error', function (e) {
+      console.error('Captured window error:', e);
+      var b = document.getElementById('runtime-error-toast') || document.createElement('div');
+      b.id = 'runtime-error-toast';
+      b.style.cssText = 'position:fixed;top:12px;left:12px;right:12px;background:#991b1b;color:#fef2f2;padding:14px 18px;z-index:999999;font-family:sans-serif;font-size:14px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.6);border:1px solid #f87171;';
+      b.innerHTML = '<b>Errore di Runtime:</b> ' + (e.message || 'Errore sconosciuto') + '<br><small style="color:#fca5a5">' + (e.filename || '') + ':' + (e.lineno || '') + '</small>';
+      document.body ? document.body.appendChild(b) : document.documentElement.appendChild(b);
+    });
+  </script>
 </head>
 
 <body>
@@ -56,6 +66,7 @@
       <div id="hud-zone-badge" class="hud-panel">
         <span class="zone-icon">📍</span>
         <span id="hud-zone-text">Azren · Le Macerie della Milizia</span>
+        <span class="hud-tech-pill" title="Fisica Rapier 3D WASM + IA YUKA + HDR Bloom & Vignette Post-Processing"><span class="tech-dot"></span> Rapier · Yuka · Bloom FX</span>
       </div>
 
       <!-- Gold, Minimap & Control Buttons -->
@@ -227,30 +238,32 @@
               <span class="clean-menu-icon">⚔️</span>
               <span class="clean-menu-text">Nuova Partita</span>
             </button>
-            <button id="intro-btn-leaderboard" class="clean-menu-btn">
-              <span class="clean-menu-icon">🏆</span>
-              <span class="clean-menu-text">Classifica</span>
-            </button>
-            <button id="intro-btn-guide" class="clean-menu-btn">
-              <span class="clean-menu-icon">📜</span>
-              <span class="clean-menu-text">Comandi &amp; Guida</span>
-            </button>
-            <button id="intro-btn-sanctum" class="clean-menu-btn">
-              <span class="clean-menu-icon">🏛️</span>
-              <span class="clean-menu-text">Santuario Ancestrale</span>
-            </button>
-            <button id="intro-btn-codex" class="clean-menu-btn">
-              <span class="clean-menu-icon">📖</span>
-              <span class="clean-menu-text">Bestiario &amp; Armi</span>
-            </button>
-            <button id="intro-btn-settings" class="clean-menu-btn">
+            <div class="intro-clean-grid">
+              <button id="intro-btn-leaderboard" class="clean-menu-btn">
+                <span class="clean-menu-icon">🏆</span>
+                <span class="clean-menu-text">Classifica</span>
+              </button>
+              <button id="intro-btn-guide" class="clean-menu-btn">
+                <span class="clean-menu-icon">📜</span>
+                <span class="clean-menu-text">Guida</span>
+              </button>
+              <button id="intro-btn-sanctum" class="clean-menu-btn">
+                <span class="clean-menu-icon">🏛️</span>
+                <span class="clean-menu-text">Santuario</span>
+              </button>
+              <button id="intro-btn-codex" class="clean-menu-btn">
+                <span class="clean-menu-icon">📖</span>
+                <span class="clean-menu-text">Bestiario</span>
+              </button>
+            </div>
+            <button id="intro-btn-settings" class="clean-menu-btn settings-btn">
               <span class="clean-menu-icon">⚙️</span>
-              <span class="clean-menu-text">Impostazioni</span>
+              <span class="clean-menu-text">Impostazioni di Gioco</span>
             </button>
           </div>
 
           <div class="intro-footer-note">
-            <span>Isola di Okkarn · Versione 1.4</span>
+            <span>Isola di Okkarn · Regole D&amp;D 5e</span>
           </div>
         </div>
       </div>
@@ -305,6 +318,19 @@
               <div class="setting-control">
                 <label class="toggle-switch">
                   <input type="checkbox" id="setting-screenshake" checked />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <div class="setting-info">
+                <span class="setting-name">🌟 Post-Processing & Neon Bloom</span>
+                <span class="setting-desc">HDR Bloom, vignettatura e dispersione cromatica Hades</span>
+              </div>
+              <div class="setting-control">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-bloom" checked />
                   <span class="toggle-slider"></span>
                 </label>
               </div>
@@ -410,17 +436,7 @@
 
       <!-- 1. Class & Subclass Selection Modal -->
       <div id="panel-class-select" class="modal-panel">
-        <div class="campaign-header">
-          <h1 class="main-title">SCEGLI IL TUO EROE</h1>
-          <h2 class="sub-title">The Albedo Renegades: Shadow of Elanthria</h2>
-          <p class="campaign-lore">
-            Seleziona la tua classe e la sottoclasse D&amp;D per iniziare la tua discesa nell'isola di <b>Okkarn</b>.
-          </p>
-        </div>
         <div id="class-cards-container" class="class-selection-container"></div>
-        <div class="modal-footer-actions">
-          <button id="btn-back-from-class-select" class="btn-back">⬅️ Torna al Menu Principale</button>
-        </div>
       </div>
 
       <!-- 2. Roguelike Feats Level-Up Card Selection -->
@@ -464,6 +480,9 @@
 
       <!-- 10. Bestiary & Weapons Codex -->
       <div id="panel-codex" class="modal-panel"></div>
+
+      <!-- 11. Celestial Forge (Forgia Runica di Raffinamento) -->
+      <div id="panel-forge" class="modal-panel"></div>
     </div>
   </div>
 

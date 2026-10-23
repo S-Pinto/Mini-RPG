@@ -15,6 +15,7 @@ import { getRandomPacts } from '../items/pactsDatabase.ts';
 import { BESTIARY_DATA, WEAPON_COMPENDIUM } from '../items/codexDatabase.ts';
 import { item3DViewer } from '../graphics/item3DViewer.ts';
 import { hero3DViewer } from '../graphics/hero3DViewer.ts';
+import { postProcessing } from '../graphics/postProcessing.ts';
 
 export interface LeaderboardEntry {
   name: string;
@@ -33,6 +34,7 @@ export interface GameSettings {
   screenshake: boolean;
   particleQuality: 'high' | 'medium' | 'low';
   damageNumbers: boolean;
+  postProcessing: boolean;
 }
 
 const DEFAULT_SETTINGS: GameSettings = {
@@ -40,7 +42,8 @@ const DEFAULT_SETTINGS: GameSettings = {
   musicVolume: 50,
   screenshake: true,
   particleQuality: 'high',
-  damageNumbers: true
+  damageNumbers: true,
+  postProcessing: true
 };
 
 const DEFAULT_LEADERBOARD: LeaderboardEntry[] = [
@@ -102,6 +105,7 @@ export class ModalManager {
   private sanctumPanel: HTMLElement | null = null;
   private pactsPanel: HTMLElement | null = null;
   private codexPanel: HTMLElement | null = null;
+  private forgePanel: HTMLElement | null = null;
 
   public settings: GameSettings = { ...DEFAULT_SETTINGS };
   private selectedBagIndex: number = 0;
@@ -113,6 +117,7 @@ export class ModalManager {
   private shopInventory: Item[] = [];
   private shopInventoryZone = 0;
   private selectedClassTab: ClassId = 'fighter';
+  private forgeTab: 'all' | 'weapon' | 'armor' | 'accessory' = 'all';
 
   public onClassSelected: ((classId: ClassId, subclassIndex: number) => void) | null = null;
   public onFeatChosen: ((feat: FeatUpgrade) => void) | null = null;
@@ -135,6 +140,7 @@ export class ModalManager {
     this.sanctumPanel = document.getElementById('panel-sanctum');
     this.pactsPanel = document.getElementById('panel-pacts');
     this.codexPanel = document.getElementById('panel-codex');
+    this.forgePanel = document.getElementById('panel-forge');
 
     this.loadSettings();
   }
@@ -157,7 +163,8 @@ export class ModalManager {
       this.shopPanel,
       this.sanctumPanel,
       this.pactsPanel,
-      this.codexPanel
+      this.codexPanel,
+      this.forgePanel
     ].forEach(p => {
       if (p) p.style.display = 'none';
     });
@@ -340,6 +347,16 @@ export class ModalManager {
       };
     }
 
+    const bloomInput = document.getElementById('setting-bloom') as HTMLInputElement | null;
+    if (bloomInput) {
+      bloomInput.checked = this.settings.postProcessing ?? true;
+      bloomInput.onchange = () => {
+        this.settings.postProcessing = bloomInput.checked;
+        postProcessing.enabled = bloomInput.checked;
+        postProcessing.bloomEnabled = bloomInput.checked;
+      };
+    }
+
     if (particlesSelect) {
       particlesSelect.value = this.settings.particleQuality;
       particlesSelect.onchange = () => {
@@ -437,8 +454,21 @@ export class ModalManager {
 
       container.innerHTML = `
         <div class="class-showcase-wrapper" style="--accent:${activeClass.color};">
+          <!-- Top Bar Header with Integrated Back Button -->
+          <div class="class-modal-top-bar">
+            <button id="btn-back-from-class-select" class="btn-back-compact" title="Torna al Menu">
+              <span class="btn-back-arrow">⬅️</span>
+              <span>Menu</span>
+            </button>
+            <div class="class-modal-title-group">
+              <h2 class="class-modal-title">SCEGLI IL TUO EROE</h2>
+              <span class="class-modal-subtitle">Seleziona classe e specializzazione per scendere nelle cripte di Okkarn</span>
+            </div>
+            <div class="class-count-chip">5 Classi D&amp;D</div>
+          </div>
+
           <!-- Class Tabs Selector Row -->
-          <div class="class-tabs-bar">
+          <div class="class-tabs-bar no-scrollbar">
             ${classesList.map(c => {
               const isSelected = c.id === this.selectedClassTab;
               return `
@@ -474,19 +504,18 @@ export class ModalManager {
 
               <!-- Core Stats Grid -->
               <div class="hero-stats-panel">
-                <div class="stat-pill"><span class="stat-icon">❤️</span> <span class="stat-label">Salute:</span> <b>${activeClass.baseStats.hp}</b></div>
-                <div class="stat-pill"><span class="stat-icon">⚔️</span> <span class="stat-label">Danno:</span> <b>${activeClass.baseStats.damage}</b></div>
-                <div class="stat-pill"><span class="stat-icon">🛡️</span> <span class="stat-label">Armatura:</span> <b>${activeClass.baseStats.armor}</b></div>
-                <div class="stat-pill"><span class="stat-icon">🎯</span> <span class="stat-label">Critico:</span> <b>${activeClass.baseStats.critChance}%</b></div>
-                <div class="stat-pill"><span class="stat-icon">⚡</span> <span class="stat-label">Velocità:</span> <b>${activeClass.baseStats.speed}</b></div>
+                <div class="stat-pill"><span class="stat-icon">❤️</span> <span class="stat-label">Salute</span> <b>${activeClass.baseStats.hp}</b></div>
+                <div class="stat-pill"><span class="stat-icon">⚔️</span> <span class="stat-label">Danno</span> <b>${activeClass.baseStats.damage}</b></div>
+                <div class="stat-pill"><span class="stat-icon">🛡️</span> <span class="stat-label">Armatura</span> <b>${activeClass.baseStats.armor}</b></div>
+                <div class="stat-pill"><span class="stat-icon">🎯</span> <span class="stat-label">Critico</span> <b>${activeClass.baseStats.critChance}%</b></div>
+                <div class="stat-pill"><span class="stat-icon">⚡</span> <span class="stat-label">Velocità</span> <b>${activeClass.baseStats.speed}</b></div>
               </div>
 
               <!-- Base Combat Kit -->
               <div class="hero-skills-block">
-                <h4 class="skills-block-title">⚔️ Arsenale di Base:</h4>
                 <div class="skill-row">
                   <div class="skill-row-header">
-                    <span class="skill-badge-type">Attacco Base [Mouse SX]</span>
+                    <span class="skill-badge-type">Base [Mouse SX]</span>
                     <span class="skill-title">${activeClass.basicAttackName}</span>
                   </div>
                   <p class="skill-row-desc">${activeClass.basicAttackDesc}</p>
@@ -505,8 +534,8 @@ export class ModalManager {
             <!-- Right Column: Subclass Specializations -->
             <div class="hero-subclasses-card">
               <div class="subclasses-header">
-                <h3 class="subclasses-main-title">🔮 SPECIALIZZAZIONE D&D</h3>
-                <p class="subclasses-subtitle">Scegli la sottoclasse per definire il tuo stile di combattimento e la tua abilità secondaria [E]:</p>
+                <h3 class="subclasses-main-title">🔮 SPECIALIZZAZIONI D&amp;D</h3>
+                <p class="subclasses-subtitle">Scegli la specializzazione per definire stile e abilità secondaria [E]:</p>
               </div>
 
               <div class="subclasses-choices">
@@ -520,7 +549,7 @@ export class ModalManager {
                   </div>
                   <div class="sub-skill-box">
                     <div class="sub-skill-header">
-                      <span class="skill-badge-type secondary">Abilità Secondaria [E]</span>
+                      <span class="skill-badge-type secondary">Abilità [E]</span>
                       <b class="sub-skill-name">${sub0.skill2.icon} ${sub0.skill2.name}</b>
                       <span class="skill-cd-badge">CD: ${sub0.skill2.cd}s</span>
                     </div>
@@ -528,7 +557,7 @@ export class ModalManager {
                   </div>
                   <div class="sub-trait-row">
                     <span class="sub-trait-icon">📜</span>
-                    <span class="sub-trait-text"><b>Tratto Passivo:</b> ${sub0.bonusDesc}</span>
+                    <span class="sub-trait-text"><b>Passiva:</b> ${sub0.bonusDesc}</span>
                   </div>
                   <button class="btn-play-subclass" data-class="${activeClass.id}" data-sub="0">
                     <span>⚔️ GIOCA COME ${sub0.name.toUpperCase()}</span>
@@ -546,7 +575,7 @@ export class ModalManager {
                   </div>
                   <div class="sub-skill-box">
                     <div class="sub-skill-header">
-                      <span class="skill-badge-type secondary">Abilità Secondaria [E]</span>
+                      <span class="skill-badge-type secondary">Abilità [E]</span>
                       <b class="sub-skill-name">${sub1.skill2.icon} ${sub1.skill2.name}</b>
                       <span class="skill-cd-badge">CD: ${sub1.skill2.cd}s</span>
                     </div>
@@ -554,7 +583,7 @@ export class ModalManager {
                   </div>
                   <div class="sub-trait-row">
                     <span class="sub-trait-icon">📜</span>
-                    <span class="sub-trait-text"><b>Tratto Passivo:</b> ${sub1.bonusDesc}</span>
+                    <span class="sub-trait-text"><b>Passiva:</b> ${sub1.bonusDesc}</span>
                   </div>
                   <button class="btn-play-subclass" data-class="${activeClass.id}" data-sub="1">
                     <span>⚔️ GIOCA COME ${sub1.name.toUpperCase()}</span>
@@ -566,6 +595,12 @@ export class ModalManager {
           </div>
         </div>
       `;
+
+      // Bind back button
+      container.querySelector('#btn-back-from-class-select')?.addEventListener('click', () => {
+        sound.btnClick();
+        this.showIntro();
+      });
 
       // Bind tab clicks
       container.querySelectorAll<HTMLButtonElement>('.class-tab-btn').forEach(btn => {
@@ -593,13 +628,6 @@ export class ModalManager {
     };
 
     renderShowcase();
-
-    const btnBack = document.getElementById('btn-back-from-class-select');
-    if (btnBack) {
-      const fresh = btnBack.cloneNode(true) as HTMLElement;
-      btnBack.parentNode?.replaceChild(fresh, btnBack);
-      fresh.addEventListener('click', () => this.showIntro());
-    }
   }
 
   // --- 2. Roguelike Feats Level-Up Card Selection (Class-Filtered & On-Demand) ---
@@ -2314,6 +2342,200 @@ export class ModalManager {
     };
 
     renderCodex();
+  }
+
+  // --- 11. CELESTIAL FORGE (Forgia Runica di Raffinamento) ---
+  public showCelestialForge(player: Player, onUpgrade?: () => void): void {
+    this.hideAll();
+    if (!this.overlay || !this.forgePanel) return;
+
+    this.overlay.classList.add('active');
+    this.forgePanel.style.display = 'flex';
+
+    const renderForge = () => {
+      const equipSlots: { slot: ItemSlot; label: string; icon: string }[] = [
+        { slot: 'weapon', label: 'Arma Impugnata', icon: '⚔️' },
+        { slot: 'armor', label: 'Armatura da Guerra', icon: '🛡️' },
+        { slot: 'helm', label: 'Elmo / Copricapo', icon: '🪖' },
+        { slot: 'ring', label: 'Anello Runico', icon: '💍' },
+        { slot: 'relic', label: 'Reliquia Sacra', icon: '🏺' }
+      ];
+
+      const equippedItems = equipSlots
+        .map(s => ({ ...s, item: player.equip[s.slot] }))
+        .filter(s => s.item !== undefined) as { slot: ItemSlot; label: string; icon: string; item: Item }[];
+
+      const filterItems = equippedItems.filter(({ slot }) => {
+        if (this.forgeTab === 'weapon') return slot === 'weapon';
+        if (this.forgeTab === 'armor') return slot === 'armor';
+        if (this.forgeTab === 'accessory') return slot === 'helm' || slot === 'ring' || slot === 'relic';
+        return true;
+      });
+
+      let cardsHtml = '';
+      if (filterItems.length === 0) {
+        cardsHtml = `
+          <div class="forge-empty-notice">
+            <span class="forge-empty-icon">💎</span>
+            <p>Nessun oggetto in questa categoria! Seleziona "Tutti" oppure apri l'inventario per equipaggiare armi o armature.</p>
+          </div>
+        `;
+      } else {
+        cardsHtml = filterItems.map(({ slot, label, icon, item }) => {
+          const currentLvl = item.upgradeLevel || 0;
+          const upgradeCost = Math.max(35, (currentLvl + 1) * 45);
+          const canAfford = player.gold >= upgradeCost;
+          const rarityCfg = RARITIES[item.rarity] || { color: '#94a3b8' };
+
+          const statPreviews: string[] = [];
+          if (slot === 'weapon') {
+            const curDmg = item.stats.damage || 0;
+            const nextDmg = Math.round(curDmg * 1.25 + 4);
+            statPreviews.push(`Danno: <b>${curDmg}</b> ➔ <b class="stat-boost">+${nextDmg}</b>`);
+            const curCrit = item.stats.critChance || 0;
+            statPreviews.push(`Critico: <b>+${curCrit}%</b> ➔ <b class="stat-boost">+${curCrit + 4}%</b>`);
+          } else if (slot === 'armor') {
+            const curArm = item.stats.armor || 0;
+            const nextArm = Math.round(curArm * 1.30 + 3);
+            statPreviews.push(`Armatura: <b>${curArm}</b> ➔ <b class="stat-boost">+${nextArm}</b>`);
+            const curHp = item.stats.maxHp || 0;
+            statPreviews.push(`Salute Massima: <b>+${curHp}</b> ➔ <b class="stat-boost">+${curHp + 25}</b>`);
+          } else {
+            for (const [k, v] of Object.entries(item.stats)) {
+              if (v && typeof v === 'number') {
+                const sLabel = STAT_LABELS_IT[k as keyof CharacterStats] || k;
+                const nextVal = Math.round(v * 1.25 + 2);
+                statPreviews.push(`${sLabel}: <b>+${v}</b> ➔ <b class="stat-boost">+${nextVal}</b>`);
+              }
+            }
+          }
+
+          return `
+            <div class="forge-item-card" style="--card-rarity:${rarityCfg.color}; border-color:${rarityCfg.color}44;">
+              <div class="forge-card-header">
+                <span class="forge-card-icon" style="background:${rarityCfg.color}22; border-color:${rarityCfg.color}">${item.icon}</span>
+                <div class="forge-card-title-group">
+                  <h3 class="forge-item-name" style="color:${rarityCfg.color}">
+                    ${item.name} ${currentLvl > 0 ? `<span class="forge-lvl-pill">+${currentLvl}</span>` : ''}
+                  </h3>
+                  <div class="forge-slot-tag">${icon} ${label} · iLvl ${item.ilvl}</div>
+                </div>
+              </div>
+
+              <div class="forge-stats-preview">
+                ${statPreviews.map(p => `<div class="forge-stat-row">${p}</div>`).join('')}
+              </div>
+
+              <div class="forge-card-action">
+                <div class="forge-cost-badge">
+                  <span class="cost-gold-icon">💰</span>
+                  <span class="cost-amount ${canAfford ? '' : 'cost-lacking'}">${upgradeCost} Oro</span>
+                </div>
+                <button class="btn-forge-upgrade ${canAfford ? 'active' : 'disabled'}" data-slot="${slot}" ${!canAfford ? 'disabled' : ''}>
+                  🔨 Raffina (+${currentLvl + 1})
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      this.forgePanel!.innerHTML = `
+        <div class="forge-modal-content">
+          <div class="forge-header">
+            <div class="forge-title-wrap">
+              <span class="forge-crest">✨🔨</span>
+              <div>
+                <h2 class="forge-title">FORGIA RUNICA DEI SUSSURRI CELESTI</h2>
+                <p class="forge-subtitle">Infondi il metallo stellare delle tue armi e armature per potenziarne i valori all'estremo.</p>
+              </div>
+            </div>
+            <div class="forge-gold-badge">
+              <span class="gold-icon">💰</span>
+              <span class="gold-label">Oro:</span>
+              <span class="gold-value">${player.gold}</span>
+            </div>
+            <button id="btn-close-forge-corner" class="modal-close-btn">&times;</button>
+          </div>
+
+          <!-- Category Filter Tabs -->
+          <div class="forge-filter-tabs">
+            <button class="forge-tab-btn ${this.forgeTab === 'all' ? 'active' : ''}" data-forge-tab="all">✨ Tutti (${equippedItems.length})</button>
+            <button class="forge-tab-btn ${this.forgeTab === 'weapon' ? 'active' : ''}" data-forge-tab="weapon">⚔️ Armi</button>
+            <button class="forge-tab-btn ${this.forgeTab === 'armor' ? 'active' : ''}" data-forge-tab="armor">🛡️ Corazze</button>
+            <button class="forge-tab-btn ${this.forgeTab === 'accessory' ? 'active' : ''}" data-forge-tab="accessory">💍 Accessori</button>
+          </div>
+
+          <div class="forge-items-grid">
+            ${cardsHtml}
+          </div>
+
+          <div class="modal-footer-actions">
+            <button id="btn-close-forge" class="btn-back">✕ Chiudi e Riprendi</button>
+          </div>
+        </div>
+      `;
+
+      const closeForge = () => {
+        this.close();
+        if (this.onResumeGame) this.onResumeGame();
+      };
+
+      document.getElementById('btn-close-forge-corner')?.addEventListener('click', closeForge);
+      document.getElementById('btn-close-forge')?.addEventListener('click', closeForge);
+
+      // Filter tabs binding
+      this.forgePanel!.querySelectorAll<HTMLButtonElement>('.forge-tab-btn').forEach(tabBtn => {
+        tabBtn.addEventListener('click', () => {
+          const tab = tabBtn.dataset.forgeTab as 'all' | 'weapon' | 'armor' | 'accessory' | undefined;
+          if (tab && tab !== this.forgeTab) {
+            this.forgeTab = tab;
+            sound.btnClick();
+            renderForge();
+          }
+        });
+      });
+
+      this.forgePanel!.querySelectorAll<HTMLButtonElement>('.btn-forge-upgrade.active').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const slot = btn.dataset.slot as ItemSlot | undefined;
+          if (!slot) return;
+          const item = player.equip[slot];
+          if (!item) return;
+
+          const currentLvl = item.upgradeLevel || 0;
+          const cost = Math.max(35, (currentLvl + 1) * 45);
+          if (player.gold < cost) return;
+
+          player.gold -= cost;
+          item.upgradeLevel = currentLvl + 1;
+
+          if (slot === 'weapon') {
+            item.stats.damage = Math.round((item.stats.damage || 10) * 1.25 + 4);
+            item.stats.critChance = Math.min(65, (item.stats.critChance || 5) + 4);
+          } else if (slot === 'armor') {
+            item.stats.armor = Math.round((item.stats.armor || 2) * 1.30 + 3);
+            item.stats.maxHp = (item.stats.maxHp || 0) + 25;
+          } else {
+            for (const k of Object.keys(item.stats) as (keyof CharacterStats)[]) {
+              const val = item.stats[k];
+              if (val && typeof val === 'number') {
+                item.stats[k] = Math.round(val * 1.25 + 2);
+              }
+            }
+          }
+
+          player.recalculateStats();
+          sound.heavyChop();
+          sound.levelUp();
+          if (onUpgrade) onUpgrade();
+
+          renderForge();
+        });
+      });
+    };
+
+    renderForge();
   }
 
   public close(): void {

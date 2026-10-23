@@ -41,11 +41,19 @@ interface AmbientMote {
   seed: number;
 }
 
+interface GhostTrail {
+  mesh: THREE.Group;
+  life: number;
+  maxLife: number;
+  color: number;
+}
+
 export class ParticleEngine {
   public group = new THREE.Group();
   private particles: Particle[] = [];
   private shockwaves: ShockwaveRing[] = [];
   private ambientMotes: AmbientMote[] = [];
+  private ghostTrails: GhostTrail[] = [];
   private pool: THREE.Mesh[] = [];
   private floatingTexts: FloatingTextItem[] = [];
   private textContainer: HTMLElement | null = null;
@@ -55,6 +63,29 @@ export class ParticleEngine {
   public init(textContainer: HTMLElement, camera: THREE.Camera): void {
     this.textContainer = textContainer;
     this.camera = camera;
+  }
+
+  public spawnGhostAfterImage(sourceMesh: THREE.Group, color = 0x8a5cf6): void {
+    if (this.ghostTrails.length >= 8) return;
+    const ghost = new THREE.Group();
+    ghost.position.copy(sourceMesh.position);
+    ghost.rotation.copy(sourceMesh.rotation);
+    ghost.scale.copy(sourceMesh.scale);
+
+    const ghostMat = getBasic(color, 0.45, true);
+    sourceMesh.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const m = child as THREE.Mesh;
+        const gMesh = new THREE.Mesh(m.geometry, ghostMat);
+        gMesh.position.copy(m.position);
+        gMesh.rotation.copy(m.rotation);
+        gMesh.scale.copy(m.scale);
+        ghost.add(gMesh);
+      }
+    });
+
+    this.group.add(ghost);
+    this.ghostTrails.push({ mesh: ghost, life: 0, maxLife: 0.22, color });
   }
 
   public spawnBurst(x: number, y: number, z: number, count: number, color: number, speed = 5, size = 0.22): void {
@@ -253,6 +284,25 @@ export class ParticleEngine {
       w.mesh.scale.set(curRadius, curRadius, curRadius);
     }
 
+    // Update Hades-style Ghost Trails
+    for (let i = this.ghostTrails.length - 1; i >= 0; i--) {
+      const g = this.ghostTrails[i];
+      g.life += dt;
+      const progress = g.life / g.maxLife;
+      if (progress >= 1.0) {
+        this.group.remove(g.mesh);
+        this.ghostTrails.splice(i, 1);
+      } else {
+        const alpha = Math.max(0, (1 - progress) * 0.45);
+        g.mesh.traverse((c) => {
+          if ((c as THREE.Mesh).isMesh) {
+            const mat = (c as THREE.Mesh).material as THREE.MeshBasicMaterial;
+            if (mat) mat.opacity = alpha;
+          }
+        });
+      }
+    }
+
     // Update floating texts
     if (this.camera) {
       for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
@@ -290,6 +340,11 @@ export class ParticleEngine {
       this.group.remove(w.mesh);
     }
     this.shockwaves = [];
+
+    for (const g of this.ghostTrails) {
+      this.group.remove(g.mesh);
+    }
+    this.ghostTrails = [];
 
     for (const ft of this.floatingTexts) {
       ft.el.remove();

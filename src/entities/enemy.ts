@@ -7,6 +7,7 @@ import { buildEnemyModel } from '../graphics/proceduralModels.ts';
 import { dungeon, type DungeonRoom } from '../world/dungeonGenerator.ts';
 import { particles } from '../graphics/particles.ts';
 import { sound } from '../audio/soundEngine.ts';
+import { aiManager } from '../ai/aiManager.ts';
 
 const ENEMY_BASE_STATS: Record<EnemyType, EnemyStats> = {
   // Azren
@@ -428,28 +429,35 @@ export class Enemy {
     let moveVecX = 0;
     let moveVecY = 0;
 
-    // Movement AI
+    // 1. Check YUKA Autonomous Steering Behaviors
+    const steering = aiManager.getSteeringVelocity(this.id, dt);
     const isRanged = this.stats.attackType === 'projectile';
 
-    if (isRanged) {
-      if (dist < 3.4) {
-        // Ranged kiting: backpedal away from player!
-        moveVecX = -dirX + perpX * lateralSpread;
-        moveVecY = -dirY + perpY * lateralSpread;
-      } else if (dist > this.stats.attackRange * 0.8) {
-        // Advance into range
-        moveVecX = dirX + perpX * lateralSpread;
-        moveVecY = dirY + perpY * lateralSpread;
-      } else {
-        // Strafe around player while in ideal range
-        moveVecX = perpX * (this.id % 2 === 0 ? 0.6 : -0.6);
-        moveVecY = perpY * (this.id % 2 === 0 ? 0.6 : -0.6);
-      }
+    if (steering && (steering.vx !== 0 || steering.vz !== 0)) {
+      moveVecX = steering.vx;
+      moveVecY = steering.vz;
     } else {
-      // Melee / Charge / AoE AI: flank & encircle player until within attack range
-      if (dist > this.stats.attackRange * 0.75) {
-        moveVecX = dirX + perpX * lateralSpread;
-        moveVecY = dirY + perpY * lateralSpread;
+      // Fallback Movement AI: Tactical Hades encircling & kiting
+      if (isRanged) {
+        if (dist < 3.4) {
+          // Ranged kiting: backpedal away from player!
+          moveVecX = -dirX + perpX * lateralSpread;
+          moveVecY = -dirY + perpY * lateralSpread;
+        } else if (dist > this.stats.attackRange * 0.8) {
+          // Advance into range
+          moveVecX = dirX + perpX * lateralSpread;
+          moveVecY = dirY + perpY * lateralSpread;
+        } else {
+          // Strafe around player while in ideal range
+          moveVecX = perpX * (this.id % 2 === 0 ? 0.6 : -0.6);
+          moveVecY = perpY * (this.id % 2 === 0 ? 0.6 : -0.6);
+        }
+      } else {
+        // Melee / Charge / AoE AI: flank & encircle player until within attack range
+        if (dist > this.stats.attackRange * 0.75) {
+          moveVecX = dirX + perpX * lateralSpread;
+          moveVecY = dirY + perpY * lateralSpread;
+        }
       }
     }
 

@@ -158,6 +158,7 @@ export interface Item {
   goldValue: number;
   isNew?: boolean;
   weaponStyle?: WeaponStyle;
+  upgradeLevel?: number;
   modelType?: WeaponModelType;
   helmType?: HelmModelType;
   armorType?: ArmorModelType;
@@ -287,8 +288,11 @@ export interface DestructibleProp {
     | 'fire_jet'
     | 'secret_wall'
     | 'rune_puzzle'
-    | 'sealed_chest';
+    | 'sealed_chest'
+    | 'celestial_fountain'
+    | 'celestial_forge';
   hp: number;
+  maxHp?: number;
   mesh?: any;
   opened?: boolean;
   shrineUsed?: boolean;

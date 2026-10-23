@@ -10,6 +10,9 @@ import type { Player } from '../entities/player.ts';
 import type { Enemy } from '../entities/enemy.ts';
 import { dungeon, type DungeonRoom } from '../world/dungeonGenerator.ts';
 import type { DestructibleProp } from '../types/game.ts';
+import { physics } from '../physics/physicsEngine.ts';
+import { aiManager } from '../ai/aiManager.ts';
+import { postProcessing } from '../graphics/postProcessing.ts';
 
 export interface Projectile {
   mesh: THREE.Mesh;
@@ -50,23 +53,94 @@ export interface SlashEffect {
   targetY?: number;
 }
 
+export interface ExpandingShockwaveRing {
+  mesh: THREE.Mesh;
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  speed: number;
+  damage: number;
+  thickness: number;
+  color: number;
+  hitPlayer: boolean;
+}
+
 export class CombatSystem {
   public group = new THREE.Group();
   public projectiles: Projectile[] = [];
   public slashes: SlashEffect[] = [];
   public lingeringZones: LingeringZone[] = [];
+  public shockwaveRings: ExpandingShockwaveRing[] = [];
   public hitStopTimer = 0;
   public shakeTrauma = 0;
   public onPropDropItem?: (propType: 'sarcophagus' | 'weapon_rack', x: number, y: number) => void;
   public onSecretWallDestroyed?: (pr: DestructibleProp) => void;
 
+  public spawnShockwaveRing(
+    x: number,
+    y: number,
+    initialRadius = 0.6,
+    maxRadius = 13.5,
+    speed = 8.5,
+    damage = 28,
+    color = 0xff3b30,
+    thickness = 0.75
+  ): ExpandingShockwaveRing {
+    const geom = new THREE.TorusGeometry(1, 0.08, 8, 48);
+    const mat = getBasic(color, 0.9, true);
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.rotation.x = Math.PI / 2;
+    mesh.position.set(x, 0.12, y);
+    mesh.scale.set(initialRadius, initialRadius, 1);
+    this.group.add(mesh);
+
+    const ring: ExpandingShockwaveRing = {
+      mesh,
+      x,
+      y,
+      radius: initialRadius,
+      maxRadius,
+      speed,
+      damage,
+      thickness,
+      color,
+      hitPlayer: false
+    };
+    this.shockwaveRings.push(ring);
+    return ring;
+  }
+
+  public spawnBulletHellSpiral(
+    cx: number,
+    cy: number,
+    count = 12,
+    speed = 10,
+    angleOffset = 0,
+    color = 0xff4400,
+    damage = 22,
+    radius = 0.35
+  ): void {
+    sound.fireball();
+    const step = (Math.PI * 2) / count;
+    for (let i = 0; i < count; i++) {
+      const angle = angleOffset + i * step;
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed;
+      this.spawnProjectile(cx, cy, vx, vy, radius, damage, false, color, 0);
+    }
+  }
+
   public addScreenShake(amount: number): void {
     this.shakeTrauma = Math.min(1.0, this.shakeTrauma + amount);
+    postProcessing.triggerAberration(amount * 0.022);
   }
 
   public triggerPropDestruction(pr: DestructibleProp, player: Player, enemies: Enemy[]): void {
     pr.hp = 0;
     if (pr.mesh) pr.mesh.visible = false;
+    physics.removePropCollider(pr.id);
+    aiManager.removeObstacle(pr.id);
 
     if (pr.type === 'explosive_barrel') {
       sound.dragonRoar();
@@ -81,6 +155,7 @@ export class CombatSystem {
         const d = Math.hypot(e.x - pr.x, e.y - pr.y);
         if (d <= 4.5) {
           e.takeDamage(65, e.x - pr.x, e.y - pr.y, 14);
+          physics.applyKnockbackToEnemy(e.id, (e.x - pr.x) * 3.5, (e.y - pr.y) * 3.5);
           e.applyStatusEffect('burn', 4.0, 8);
           particles.spawnFloatingText(e.x, 2.0, e.y, '65 🔥 BRUCIATURA', '#ff6600', true);
         }
@@ -259,6 +334,7 @@ export class CombatSystem {
     player.invulnerableTimer = 0.35;
 
     sound.dash();
+    postProcessing.triggerAberration(0.016);
 
     // Determine dodge direction
     if (player.isMoving && (player.moveX !== 0 || player.moveY !== 0)) {
@@ -422,6 +498,7 @@ export class CombatSystem {
             }
 
             e.takeDamage(dmg, dx, dy, knockback);
+            physics.applyKnockbackToEnemy(e.id, dx * knockback * 0.22, dy * knockback * 0.22);
             const label = step === 2 ? `${dmg} AFFONDO!` : (step === 1 ? `${dmg} TAGLIO!` : `${dmg}`);
             particles.spawnFloatingText(e.x, 2.0, e.y, label, isCrit ? '#ffd700' : (step === 2 ? '#ff9955' : '#ffffff'), isCrit || step > 0);
 
@@ -436,7 +513,7 @@ export class CombatSystem {
 
       // Check destructible props in range
       for (const p of room.props) {
-        if (p.hp <= 0 || p.type === 'chest' || p.type === 'shrine' || p.type === 'shop_counter' || p.type === 'teleport_pad' || p.type === 'skill_crucible' || p.type === 'pact_altar' || p.type === 'cage' || p.type === 'spike_trap' || p.type === 'fire_jet') continue;
+        if (p.hp <= 0 || p.type === 'chest' || p.type === 'shrine' || p.type === 'shop_counter' || p.type === 'teleport_pad' || p.type === 'skill_crucible' || p.type === 'pact_altar' || p.type === 'cage' || p.type === 'spike_trap' || p.type === 'fire_jet' || p.type === 'celestial_fountain' || p.type === 'celestial_forge') continue;
         const dx = p.x - player.x;
         const dy = p.y - player.y;
         if (Math.hypot(dx, dy) <= reach + 0.8) {
@@ -1515,11 +1592,38 @@ export class CombatSystem {
       }
 
       case 'aoe': {
-        telegraphs.createCircle(e.x, e.y, 5.0, 0.8, 0xff3b30, () => {
-          particles.spawnShockwave(e.x, e.y, 5.0, 0xff3b30);
-          particles.spawnBurst(e.x, 1.0, e.y, 30, 0xff3b30, 8);
-          if (Math.hypot(player.x - e.x, player.y - e.y) <= 5.0) {
-            dealEnemyDmg(Math.round(e.stats.damage * 1.5));
+        const isBoss = !!e.stats.isBoss;
+        const radius = isBoss ? 6.5 : 5.0;
+        const duration = isBoss ? 0.95 : 0.8;
+        const bossColor = e.stats.color || 0xff3b30;
+
+        telegraphs.createCircle(e.x, e.y, radius, duration, bossColor, () => {
+          sound.dragonRoar();
+          this.addScreenShake(isBoss ? 0.6 : 0.35);
+          particles.spawnShockwave(e.x, e.y, radius, bossColor, 0.45);
+          particles.spawnBurst(e.x, 1.0, e.y, isBoss ? 45 : 30, bossColor, 9);
+
+          if (Math.hypot(player.x - e.x, player.y - e.y) <= radius) {
+            dealEnemyDmg(Math.round(e.stats.damage * (isBoss ? 1.6 : 1.5)), isBoss ? 'FRANTUMAZIONE!' : undefined, true);
+          }
+
+          // Hades-style Expanding Shockwave Ring (i-frame dashable!)
+          if (isBoss) {
+            this.spawnShockwaveRing(e.x, e.y, 1.0, 14.0, 8.5, Math.round(e.stats.damage * 0.9), bossColor);
+
+            // Phase 2 (< 50% HP): Bosses unleash distinct bullet-hell patterns
+            const isPhase2 = e.hp <= e.maxHp * 0.5;
+            if (isPhase2) {
+              if (e.type === 'boss_grummak') {
+                this.spawnBulletHellSpiral(e.x, e.y, 8, 9.0, (e.attackCount * 0.35), 0xd97706, Math.round(e.stats.damage * 0.7));
+              } else if (e.type === 'boss_vaeloria') {
+                this.spawnBulletHellSpiral(e.x, e.y, 12, 10.0, (e.attackCount * 0.5), 0x38bdf8, Math.round(e.stats.damage * 0.75));
+              } else if (e.type === 'boss_troll_warlord') {
+                setTimeout(() => {
+                  this.spawnShockwaveRing(e.x, e.y, 1.0, 14.5, 9.0, Math.round(e.stats.damage * 0.85), 0x22c55e);
+                }, 350);
+              }
+            }
           }
         });
         break;
@@ -1527,15 +1631,25 @@ export class CombatSystem {
 
       case 'dragon_breath': {
         sound.dragonRoar();
+        this.addScreenShake(0.5);
         const numFireballs = 7;
-        const spread = Math.PI * 0.45;
+        const spread = Math.PI * 0.48;
         const baseAngle = Math.atan2(dirX, dirY);
 
         for (let i = 0; i < numFireballs; i++) {
           const a = baseAngle + (i - (numFireballs - 1) / 2) * (spread / (numFireballs - 1));
           const vx = Math.sin(a) * 14;
           const vy = Math.cos(a) * 14;
-          this.spawnProjectile(e.x, e.y, vx, vy, 0.4, e.stats.damage, false, 0xff3300, 0);
+          this.spawnProjectile(e.x, e.y, vx, vy, 0.42, e.stats.damage, false, 0xff3300, 0);
+        }
+
+        // Draconic Ground Stomp Shockwave Ring
+        this.spawnShockwaveRing(e.x, e.y, 1.2, 14.5, 9.2, Math.round(e.stats.damage * 0.95), 0xff4400);
+
+        // Phase 2 (< 60% HP): Dragon triggers rotating bullet-hell flame spiral
+        if (e.hp <= e.maxHp * 0.6) {
+          const spiralCount = e.hp <= e.maxHp * 0.3 ? 18 : 12;
+          this.spawnBulletHellSpiral(e.x, e.y, spiralCount, 10.5, (e.attackCount * 0.4), 0xff6600, Math.round(e.stats.damage * 0.8));
         }
         break;
       }
@@ -1581,6 +1695,43 @@ export class CombatSystem {
 
   public update(dt: number, player: Player, enemies: Enemy[], room: DungeonRoom): void {
     // 0. Update Active Player Orbiting Spheres (Fire & Holy Orbs from Skill Augments)
+    // 0.1 Update Expanding Shockwave Rings (Hades Dash / i-frame mechanics)
+    for (let i = this.shockwaveRings.length - 1; i >= 0; i--) {
+      const ring = this.shockwaveRings[i];
+      ring.radius += ring.speed * dt;
+      ring.mesh.scale.set(ring.radius, ring.radius, 1);
+
+      const distToCenter = Math.hypot(player.x - ring.x, player.y - ring.y);
+      const isTouchingRing = Math.abs(distToCenter - ring.radius) <= ring.thickness;
+
+      if (isTouchingRing && !ring.hitPlayer) {
+        if (player.dashTimer > 0 || player.invulnerableTimer > 0) {
+          // Clean i-frame dash through the expanding wave!
+          sound.whoosh();
+          particles.spawnBurst(player.x, 1.0, player.y, 8, 0x38bdf8, 4);
+          particles.spawnFloatingText(player.x, 2.2, player.y, '⚡ SCHIVATA PERFETTA!', '#38bdf8', true, 'large');
+          ring.hitPlayer = true;
+        } else {
+          ring.hitPlayer = true;
+          const dmg = player.takeDamage(ring.damage);
+          if (dmg > 0) {
+            sound.playerHurt();
+            this.addScreenShake(0.45);
+            particles.spawnBurst(player.x, 1.0, player.y, 16, ring.color, 6);
+            particles.spawnFloatingText(player.x, 2.4, player.y, `-${dmg} ONDA D'URTO!`, '#ff2200', true);
+            const pushAngle = Math.atan2(player.y - ring.y, player.x - ring.x);
+            player.x += Math.cos(pushAngle) * 0.8;
+            player.y += Math.sin(pushAngle) * 0.8;
+          }
+        }
+      }
+
+      if (ring.radius >= ring.maxRadius) {
+        this.group.remove(ring.mesh);
+        ring.mesh.geometry.dispose();
+        this.shockwaveRings.splice(i, 1);
+      }
+    }
     if (player.activeOrbs && player.activeOrbs.length > 0) {
       for (const orb of player.activeOrbs) {
         if (orb.hitCooldown !== undefined && orb.hitCooldown > 0) {
@@ -1731,7 +1882,7 @@ export class CombatSystem {
         let propHit = false;
         if (room && room.props) {
           for (const pr of room.props) {
-            if (pr.hp <= 0 || !pr.mesh || pr.type === 'chest' || pr.type === 'shrine' || pr.type === 'shop_counter' || pr.type === 'teleport_pad' || pr.type === 'skill_crucible' || pr.type === 'pact_altar' || pr.type === 'cage' || pr.type === 'spike_trap' || pr.type === 'fire_jet') continue;
+            if (pr.hp <= 0 || !pr.mesh || pr.type === 'chest' || pr.type === 'shrine' || pr.type === 'shop_counter' || pr.type === 'teleport_pad' || pr.type === 'skill_crucible' || pr.type === 'pact_altar' || pr.type === 'cage' || pr.type === 'spike_trap' || pr.type === 'fire_jet' || pr.type === 'celestial_fountain' || pr.type === 'celestial_forge') continue;
             if (Math.hypot(pr.x - p.x, pr.y - p.y) <= 0.8 + p.radius) {
               pr.hp -= p.damage;
               if (pr.hp <= 0) {
@@ -1810,6 +1961,12 @@ export class CombatSystem {
     }
     this.slashes = [];
     this.lingeringZones = [];
+
+    for (const r of this.shockwaveRings) {
+      this.group.remove(r.mesh);
+      r.mesh.geometry.dispose();
+    }
+    this.shockwaveRings = [];
   }
 }
 

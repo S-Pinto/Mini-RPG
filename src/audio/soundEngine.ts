@@ -165,6 +165,10 @@ class SoundEngine {
     this.playTone(320, 0.16, 'sine', 0.09, 580);
   }
 
+  public whoosh(): void {
+    this.dash();
+  }
+
   public teleport(): void {
     this.playTone(280, 0.28, 'sine', 0.12, 750);
     this.playTone(560, 0.32, 'triangle', 0.09, 1120, 0.08);
@@ -202,6 +206,20 @@ class SoundEngine {
 
   public doorUnlock(): void {
     this.playTone(293.66, 0.25, 'triangle', 0.1, 440);
+  }
+
+  public summonRift(): void {
+    // Ominous low demonic horn with dark ascending interval
+    this.playTone(110, 0.45, 'sawtooth', 0.22, 65);
+    this.playTone(164.81, 0.55, 'triangle', 0.18, 220, 0.08);
+  }
+
+  public arenaClear(): void {
+    // Victorious fanfare chime
+    const notes = [440, 554.37, 659.25, 880];
+    notes.forEach((f, i) => {
+      this.playTone(f, 0.35, 'triangle', 0.16, undefined, i * 0.08);
+    });
   }
 
   public legendaryDrop(): void {

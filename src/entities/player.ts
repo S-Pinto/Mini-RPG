@@ -3,6 +3,8 @@ import type { CharacterStats, ClassId, Item, SubclassConfig, FeatUpgrade, SkillA
 import { CLASSES_DATA } from '../types/classesData.ts';
 import { buildPlayerModel, type HumanoidRig, type AttackAnimationType } from '../graphics/proceduralModels.ts';
 import { dungeon, type DungeonRoom } from '../world/dungeonGenerator.ts';
+import { physics } from '../physics/physicsEngine.ts';
+import { particles } from '../graphics/particles.ts';
 
 export class Player {
   public classId: ClassId;
@@ -40,6 +42,7 @@ export class Player {
   }[] = [];
   public bonusShield = 0;
   public flurryCritTimer = 0;
+  private ghostTrailTimer = 0;
 
   public hp: number;
   public maxHp: number;
@@ -197,13 +200,28 @@ export class Player {
     if (this.dashTimer > 0) {
       this.dashTimer -= dt;
       moveSpeed = this.stats.speed * 2.8;
+
+      // Hades-style ghost after-image silhouette trail during dash
+      this.ghostTrailTimer -= dt;
+      if (this.ghostTrailTimer <= 0) {
+        this.ghostTrailTimer = 0.045;
+        const trailColor = this.classId === 'paladin' ? 0xffea00 :
+          (this.classId === 'fighter' ? 0xef4444 :
+          (this.classId === 'wizard' ? 0x8a5cf6 :
+          (this.classId === 'rogue' ? 0x10b981 : 0x06b6d4)));
+        particles.spawnGhostAfterImage(this.mesh, trailColor);
+      }
     }
 
     const vx = (this.dashTimer > 0 ? this.moveX : dx) * moveSpeed * dt;
     const vy = (this.dashTimer > 0 ? this.moveY : dy) * moveSpeed * dt;
 
-    // Smooth sliding collision against room boundaries & walls
-    dungeon.moveEntity(room, this, vx, vy);
+    // Smooth sliding collision against room boundaries & walls via Rapier 3D
+    if (physics.isReady) {
+      physics.movePlayer(this, vx, vy, dt);
+    } else {
+      dungeon.moveEntity(room, this, vx, vy);
+    }
 
     if (Math.abs(this.knockbackX) > 0.05 || Math.abs(this.knockbackY) > 0.05) {
       dungeon.moveEntity(room, this, this.knockbackX * dt, this.knockbackY * dt);

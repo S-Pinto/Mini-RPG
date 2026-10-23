@@ -4,17 +4,19 @@
 import * as THREE from 'three';
 import type { DestructibleProp, ZoneConfig, RoomType } from '../types/game.ts';
 import { GEO, getLambert, getBasic, buildPropModel } from '../graphics/proceduralModels.ts';
-
-export const TILE_SIZE = 2.0;
-export const ROOM_WIDTH = 19;
-export const ROOM_HEIGHT = 13;
-export const WORLD_W = ROOM_WIDTH * TILE_SIZE; // 38 units
-export const WORLD_H = ROOM_HEIGHT * TILE_SIZE; // 26 units
-
-export const DOOR_X = 9;
-export const DOOR_Y = 6;
-export const DOOR_CX = DOOR_X * TILE_SIZE + TILE_SIZE / 2;
-export const DOOR_CY = DOOR_Y * TILE_SIZE + TILE_SIZE / 2;
+import {
+  TILE_SIZE,
+  ROOM_WIDTH,
+  ROOM_HEIGHT,
+  WORLD_W,
+  WORLD_H,
+  DOOR_X,
+  DOOR_Y,
+  DOOR_CX,
+  DOOR_CY
+} from './dungeonConstants.ts';
+export * from './dungeonConstants.ts';
+import { ARENA_PREFABS, getRandomArenaPrefab, type ArenaPrefab, type TacticalCoverPoint } from './arenaPrefabs.ts';
 
 export type RoomShape = 
   | 'quadrant_sanctuary' 
@@ -45,6 +47,8 @@ export interface DungeonRoom {
   torches: THREE.Mesh[];
   waypointName?: string;
   waypointUnlocked?: boolean;
+  arenaPrefab?: ArenaPrefab;
+  coverPoints?: TacticalCoverPoint[];
 }
 
 export class DungeonGenerator {
@@ -136,12 +140,12 @@ export class DungeonGenerator {
     if (preBossNeighbor && preBossNeighbor !== start) {
       preBossNeighbor.type = 'checkpoint';
       preBossNeighbor.cleared = true;
-      preBossNeighbor.waypointName = 'Santuario del Boss';
+      preBossNeighbor.waypointName = 'Santuario dei Sussurri Celesti';
     } else if (available.length > 0) {
       const cp = available.shift()!;
       cp.type = 'checkpoint';
       cp.cleared = true;
-      cp.waypointName = 'Santuario della Soglia';
+      cp.waypointName = 'Santuario dei Sussurri Celesti';
     }
 
     // 3. Shop room (has teleport pad & equipment merchant)
@@ -186,184 +190,31 @@ export class DungeonGenerator {
 
   // Generate complex, organic mini-dungeon room geometries with corridors and sub-rooms
   private buildComplexRoomTiles(r: DungeonRoom): void {
-    const tiles: number[][] = [];
-    for (let y = 0; y < ROOM_HEIGHT; y++) {
-      const row: number[] = [];
-      for (let x = 0; x < ROOM_WIDTH; x++) {
-        // Outer boundary is always wall
-        row.push(x === 0 || y === 0 || x === ROOM_WIDTH - 1 || y === ROOM_HEIGHT - 1 ? 1 : 0);
-      }
-      tiles.push(row);
-    }
+    let tiles: number[][] = [];
 
-    const shapes: RoomShape[] = [
-      'quadrant_sanctuary',
-      'twin_crypts',
-      'winding_catacombs',
-      'pillared_halls',
-      'rotunda_colonnade',
-      'split_courtyard',
-      'grand_bridge_chasm',
-      'elevated_sanctuary',
-      'catacomb_labyrinth'
-    ];
-    let chosenShape: RoomShape = r.type === 'start' 
-      ? 'pillared_halls' 
-      : (r.type === 'boss' ? 'dragon_colosseum' : shapes[Math.floor(Math.random() * shapes.length)]);
-    r.shape = chosenShape;
-
-    switch (chosenShape) {
-      case 'grand_bridge_chasm': {
-        // Deep abyss chasm running across rows 4 and 8
-        // Spanned by an elevated grand stone bridge (cols 7..11) and flank catwalks (cols 2..3 and 15..16)
-        for (const cy of [4, 8]) {
-          for (let x = 1; x < ROOM_WIDTH - 1; x++) {
-            if (!(x >= 7 && x <= 11) && !(x >= 2 && x <= 3) && !(x >= 15 && x <= 16)) {
-              tiles[cy][x] = 4; // chasm pit
-            }
-          }
+    if (r.type === 'normal') {
+      const prefab = getRandomArenaPrefab();
+      r.arenaPrefab = prefab;
+      r.shape = prefab.shape as RoomShape;
+      r.coverPoints = prefab.coverPoints;
+      tiles = prefab.tiles.map(row => [...row]);
+    } else if (r.type === 'boss') {
+      const prefab = ARENA_PREFABS[0];
+      r.arenaPrefab = prefab;
+      r.shape = 'dragon_colosseum';
+      r.coverPoints = prefab.coverPoints;
+      tiles = prefab.tiles.map(row => [...row]);
+    } else {
+      tiles = [];
+      for (let y = 0; y < ROOM_HEIGHT; y++) {
+        const row: number[] = [];
+        for (let x = 0; x < ROOM_WIDTH; x++) {
+          row.push(x === 0 || y === 0 || x === ROOM_WIDTH - 1 || y === ROOM_HEIGHT - 1 ? 1 : 0);
         }
-        // Guard pillars flanking the bridge entrances
-        tiles[3][6] = 2; tiles[3][12] = 2;
-        tiles[9][6] = 2; tiles[9][12] = 2;
-        break;
+        tiles.push(row);
       }
-
-      case 'elevated_sanctuary': {
-        // Grand sanctuary with central dais pillars and corner prayer alcoves
-        for (const py of [3, 9]) {
-          for (const px of [5, 13]) {
-            tiles[py][px] = 2;
-          }
-        }
-        tiles[2][3] = 1; tiles[2][ROOM_WIDTH - 4] = 1;
-        tiles[ROOM_HEIGHT - 3][3] = 1; tiles[ROOM_HEIGHT - 3][ROOM_WIDTH - 4] = 1;
-        break;
-      }
-
-      case 'catacomb_labyrinth': {
-        // Dense labyrinth with winding partitions and hidden alcoves
-        for (let x = 3; x <= 7; x++) tiles[3][x] = 1;
-        for (let x = 11; x <= 15; x++) tiles[3][x] = 1;
-        for (let x = 3; x <= 7; x++) tiles[9][x] = 1;
-        for (let x = 11; x <= 15; x++) tiles[9][x] = 1;
-        for (let y = 4; y <= 8; y++) {
-          if (y !== 6) {
-            tiles[y][4] = 1;
-            tiles[y][14] = 1;
-          }
-        }
-        tiles[6][3] = 2;
-        tiles[6][15] = 2;
-        break;
-      }
-
-      case 'dragon_colosseum': {
-        // Massive circular gladiatorial arena for Boss encounters
-        // Corner bastions
-        tiles[1][1] = 1; tiles[1][2] = 1; tiles[2][1] = 1;
-        tiles[1][ROOM_WIDTH - 2] = 1; tiles[1][ROOM_WIDTH - 3] = 1; tiles[2][ROOM_WIDTH - 2] = 1;
-        tiles[ROOM_HEIGHT - 2][1] = 1; tiles[ROOM_HEIGHT - 2][2] = 1; tiles[ROOM_HEIGHT - 3][1] = 1;
-        tiles[ROOM_HEIGHT - 2][ROOM_WIDTH - 2] = 1; tiles[ROOM_HEIGHT - 2][ROOM_WIDTH - 3] = 1; tiles[ROOM_HEIGHT - 3][ROOM_WIDTH - 2] = 1;
-
-        // Grand Colosseum colonnade of 10 massive pillars providing tactical cover
-        const colosseumPillars = [
-          [4, 2], [9, 2], [14, 2],
-          [3, 4], [15, 4],
-          [3, 8], [15, 8],
-          [4, 10], [9, 10], [14, 10]
-        ];
-        for (const [px, py] of colosseumPillars) {
-          tiles[py][px] = 2;
-        }
-        break;
-      }
-
-      case 'quadrant_sanctuary': {
-        // Internal partition walls forming 4 distinct sub-rooms with arched doorways
-        // Vertical partitions at x=5 and x=13
-        for (let y = 1; y < ROOM_HEIGHT - 1; y++) {
-          if (y !== 2 && y !== 6 && y !== 10) {
-            tiles[y][5] = 1;
-            tiles[y][13] = 1;
-          }
-        }
-        // Horizontal partitions at y=4 and y=8
-        for (let x = 1; x < ROOM_WIDTH - 1; x++) {
-          if (x !== 3 && x !== 9 && x !== 15) {
-            tiles[4][x] = 1;
-            tiles[8][x] = 1;
-          }
-        }
-        break;
-      }
-
-      case 'twin_crypts': {
-        // Grand central wall with 3 ornate arched openings dividing into East and West Halls
-        for (let y = 1; y < ROOM_HEIGHT - 1; y++) {
-          if (y !== 2 && y !== 6 && y !== 10) {
-            tiles[y][9] = 1;
-          }
-        }
-        // Colonnade of pillars flanking the central hall
-        for (const py of [3, 9]) {
-          for (const px of [4, 14]) {
-            tiles[py][px] = 2;
-          }
-        }
-        break;
-      }
-
-      case 'winding_catacombs': {
-        // Meandering S-shaped corridors with sub-alcoves
-        for (let y = 2; y <= 5; y++) tiles[y][6] = 1;
-        for (let y = 7; y <= 10; y++) tiles[y][12] = 1;
-        for (let x = 2; x <= 4; x++) tiles[8][x] = 1;
-        for (let x = 14; x <= 16; x++) tiles[4][x] = 1;
-
-        tiles[3][3] = 2;
-        tiles[9][15] = 2;
-        break;
-      }
-
-      case 'pillared_halls': {
-        // Grand sanctuary with 6 stone pillars and side chapels
-        for (const py of [3, 9]) {
-          for (const px of [4, 9, 14]) {
-            if (!(px === DOOR_X && py === DOOR_Y)) {
-              tiles[py][px] = 2;
-            }
-          }
-        }
-        // Corner alcove walls
-        tiles[2][2] = 1; tiles[2][ROOM_WIDTH - 3] = 1;
-        tiles[ROOM_HEIGHT - 3][2] = 1; tiles[ROOM_HEIGHT - 3][ROOM_WIDTH - 3] = 1;
-        break;
-      }
-
-      case 'rotunda_colonnade': {
-        // Diagonal beveled corners
-        tiles[1][1] = 1; tiles[1][2] = 1; tiles[2][1] = 1;
-        tiles[1][ROOM_WIDTH - 2] = 1; tiles[1][ROOM_WIDTH - 3] = 1; tiles[2][ROOM_WIDTH - 2] = 1;
-        tiles[ROOM_HEIGHT - 2][1] = 1; tiles[ROOM_HEIGHT - 2][2] = 1; tiles[ROOM_HEIGHT - 3][1] = 1;
-        tiles[ROOM_HEIGHT - 2][ROOM_WIDTH - 2] = 1; tiles[ROOM_HEIGHT - 2][ROOM_WIDTH - 3] = 1; tiles[ROOM_HEIGHT - 3][ROOM_WIDTH - 2] = 1;
-
-        // Octagonal ring of pillars
-        const pillarSpots = [[5, 3], [13, 3], [4, 6], [14, 6], [5, 9], [13, 9]];
-        for (const [px, py] of pillarSpots) {
-          tiles[py][px] = 2;
-        }
-        break;
-      }
-
-      case 'split_courtyard': {
-        // Ruined courtyard with broken perimeter walls and central cross-hall
-        for (let x = 3; x <= 6; x++) tiles[4][x] = 1;
-        for (let x = 12; x <= 15; x++) tiles[8][x] = 1;
-        tiles[3][14] = 2;
-        tiles[9][4] = 2;
-        break;
-      }
+      tiles[3][4] = 2; tiles[3][14] = 2;
+      tiles[9][4] = 2; tiles[9][14] = 2;
     }
 
     // GUARANTEED SAFE PATHWAYS FOR DOORS & CENTER:
@@ -470,7 +321,7 @@ export class DungeonGenerator {
         hp: 9999
       });
     } else if (r.type === 'checkpoint') {
-      // Pre-boss / waypoint room teleport pad
+      // Santuario dei Sussurri Celesti: Fonte della Rinascita + Forgia Runica + Portale Rapido
       r.props.push({
         id: ++propSeq,
         x: WORLD_W / 2,
@@ -478,8 +329,24 @@ export class DungeonGenerator {
         type: 'teleport_pad',
         hp: 9999
       });
+      // Fonte della Rinascita Celestiale (curazione completa, pozioni riempite e scudo celestiale)
+      r.props.push({
+        id: ++propSeq,
+        x: WORLD_W / 2 - 3.4,
+        y: WORLD_H / 2,
+        type: 'celestial_fountain',
+        hp: 9999
+      });
+      // Forgia Runica di Raffinamento (affilatura armi e forgiatura armature per oro)
+      r.props.push({
+        id: ++propSeq,
+        x: WORLD_W / 2 + 3.4,
+        y: WORLD_H / 2,
+        type: 'celestial_forge',
+        hp: 9999
+      });
       for (let i = 0; i < 2; i++) {
-        const s = this.findFreeSpot(r, WORLD_W / 2, WORLD_H / 2, 2.5);
+        const s = this.findFreeSpot(r, WORLD_W / 2, WORLD_H / 2, 3.8);
         r.props.push({ id: ++propSeq, x: s.x, y: s.y, type: 'pot', hp: 10 });
       }
     } else if (r.type === 'shop') {
@@ -569,6 +436,13 @@ export class DungeonGenerator {
         });
       }
     } else if (r.type === 'normal') {
+      // Load preset props if arena prefab defined them
+      if (r.arenaPrefab && r.arenaPrefab.presetProps.length > 0) {
+        for (const p of r.arenaPrefab.presetProps) {
+          r.props.push({ ...p, id: ++propSeq });
+        }
+      }
+
       // 1. Dining set (table + 2 chairs)
       const tSpot = this.findFreeSpot(r, 0, 0, 0);
       r.props.push({
@@ -896,8 +770,20 @@ export class DungeonGenerator {
 
     const wallMat = getLambert(zone.wallColor);
     const topMat = getLambert(zone.wallColor + 0x111111);
+    const plinthMat = getLambert(zone.wallColor - 0x080808, 0x08080c);
+    const corbelMat = getLambert(zone.wallColor + 0x0a0a0a);
 
-    // Wall & Obstacle blocks
+    // Biome-specific wall accent materials
+    let biomeAccentMat: THREE.Material | null = null;
+    if (zone.id === 'vazark') {
+      biomeAccentMat = getBasic(0xff4400, 0.85, true);
+    } else if (zone.id === 'elshiff') {
+      biomeAccentMat = getBasic(0x38bdf8, 0.8, true);
+    } else if (zone.id === 'azren') {
+      biomeAccentMat = getLambert(0xd4af37, 0x4a3c10);
+    }
+
+    // Wall & Obstacle blocks with multi-layered architectural stonework
     for (let y = 0; y < ROOM_HEIGHT; y++) {
       for (let x = 0; x < ROOM_WIDTH; x++) {
         const tileVal = r.tiles[y][x];
@@ -913,6 +799,16 @@ export class DungeonGenerator {
           const isOuterWall = x === 0 || x === ROOM_WIDTH - 1 || y === 0;
           const isFrontWall = y === ROOM_HEIGHT - 1;
           const wallHeight = isFrontWall ? 1.0 : (isOuterWall ? 3.8 : (y >= ROOM_HEIGHT - 3 ? 1.4 : 2.4));
+
+          // 1. Stepped Heavy Base Plinth (grounds the wall with weight)
+          const plinth = new THREE.Mesh(GEO.box, plinthMat);
+          plinth.position.set(cx, 0.14, cz);
+          plinth.scale.set(TILE_SIZE * 1.04, 0.28, TILE_SIZE * 1.04);
+          plinth.castShadow = true;
+          plinth.receiveShadow = true;
+          roomGroup.add(plinth);
+
+          // 2. Main Wall Column / Body
           const wall = new THREE.Mesh(GEO.box, wallMat);
           wall.position.set(cx, wallHeight / 2, cz);
           wall.scale.set(TILE_SIZE, wallHeight, TILE_SIZE);
@@ -920,27 +816,70 @@ export class DungeonGenerator {
           wall.receiveShadow = true;
           roomGroup.add(wall);
 
+          // 3. Overhanging Cornice / Corbel Trim just below the cap
+          const cornice = new THREE.Mesh(GEO.box, corbelMat);
+          cornice.position.set(cx, wallHeight - 0.08, cz);
+          cornice.scale.set(TILE_SIZE * 1.05, 0.16, TILE_SIZE * 1.05);
+          cornice.castShadow = true;
+          cornice.receiveShadow = true;
+          roomGroup.add(cornice);
+
+          // 4. Heavy Top Stone Cap
           const topCap = new THREE.Mesh(GEO.box, topMat);
-          topCap.position.set(cx, wallHeight + 0.05, cz);
-          topCap.scale.set(TILE_SIZE + 0.05, 0.1, TILE_SIZE + 0.05);
+          topCap.position.set(cx, wallHeight + 0.06, cz);
+          topCap.scale.set(TILE_SIZE * 1.08, 0.12, TILE_SIZE * 1.08);
           topCap.castShadow = true;
           topCap.receiveShadow = true;
           roomGroup.add(topCap);
+
+          // 5. Outer Wall Battlements (Crenellations / Merlons)
+          if (isOuterWall && wallHeight > 2.0) {
+            const merlonA = new THREE.Mesh(GEO.box, topMat);
+            merlonA.scale.set(TILE_SIZE * 0.42, 0.36, TILE_SIZE * 0.42);
+            merlonA.position.set(cx - TILE_SIZE * 0.26, wallHeight + 0.24, cz);
+            merlonA.castShadow = true;
+
+            const merlonB = new THREE.Mesh(GEO.box, topMat);
+            merlonB.scale.set(TILE_SIZE * 0.42, 0.36, TILE_SIZE * 0.42);
+            merlonB.position.set(cx + TILE_SIZE * 0.26, wallHeight + 0.24, cz);
+            merlonB.castShadow = true;
+
+            roomGroup.add(merlonA, merlonB);
+          }
+
+          // 6. Biome Decorative Accent Seam
+          if (biomeAccentMat && (isOuterWall || (x + y) % 3 === 0)) {
+            const accent = new THREE.Mesh(GEO.box, biomeAccentMat);
+            accent.scale.set(TILE_SIZE * 0.92, 0.08, TILE_SIZE * 0.06);
+            accent.position.set(cx, 0.95, cz + (y === 0 ? TILE_SIZE * 0.48 : -TILE_SIZE * 0.48));
+            roomGroup.add(accent);
+          }
         } else if (tileVal === 2) {
-          // Ancient sculpted broken pillar / column
+          // Ancient sculpted architectural column with fluted base, ring band, and sculpted capital
+          const pillarBase = new THREE.Mesh(GEO.box, plinthMat);
+          pillarBase.position.set(cx, 0.15, cz);
+          pillarBase.scale.set(1.25, 0.3, 1.25);
+          pillarBase.castShadow = true;
+          pillarBase.receiveShadow = true;
+
           const pillar = new THREE.Mesh(GEO.cyl, wallMat);
-          pillar.position.set(cx, 1.1, cz);
-          pillar.scale.set(0.85, 2.2, 0.85);
+          pillar.position.set(cx, 1.15, cz);
+          pillar.scale.set(0.82, 2.1, 0.82);
           pillar.castShadow = true;
           pillar.receiveShadow = true;
 
+          const ringBand = new THREE.Mesh(GEO.torus, corbelMat);
+          ringBand.scale.set(0.86, 0.86, 0.08);
+          ringBand.rotation.x = Math.PI / 2;
+          ringBand.position.set(cx, 1.2, cz);
+
           const cap = new THREE.Mesh(GEO.box, topMat);
-          cap.scale.set(1.15, 0.22, 1.15);
-          cap.position.set(cx, 2.2, cz);
+          cap.scale.set(1.22, 0.24, 1.22);
+          cap.position.set(cx, 2.28, cz);
           cap.castShadow = true;
           cap.receiveShadow = true;
 
-          roomGroup.add(pillar, cap);
+          roomGroup.add(pillarBase, pillar, ringBand, cap);
         } else if (tileVal === 4) {
           // Deep abyss chasm / magma trench below floor level
           const abyssColor = zone.id === 'vazark' ? 0xff4400 : (zone.id === 'morgen' ? 0x1f3d1f : 0x140a24);

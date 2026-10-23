@@ -148,7 +148,14 @@ export class HudManager {
     if (this.mobS2Name) this.mobS2Name.textContent = (player.subclass.skill2.name + s2Tag).substring(0, 8).toUpperCase();
   }
 
-  public update(player: Player, currentRoom: DungeonRoom, allRooms: DungeonRoom[], zone: ZoneConfig, enemies: Enemy[]): void {
+  public update(
+    player: Player,
+    currentRoom: DungeonRoom,
+    allRooms: DungeonRoom[],
+    zone: ZoneConfig,
+    enemies: Enemy[],
+    waveInfo?: { current: number; total: number; isTransition: boolean }
+  ): void {
     this.updateSkillInfo(player);
 
     // 1. Player Vitals
@@ -178,7 +185,18 @@ export class HudManager {
       const avatars: Record<string, string> = { paladin: '🛡️', wizard: '🔮', fighter: '⚔️', rogue: '🗡️', cleric: '⚡' };
       this.charAvatar.textContent = avatars[player.classId] || '⚔️';
     }
-    if (this.zoneText) this.zoneText.textContent = zone.name;
+    if (this.zoneText) {
+      if (currentRoom.arenaPrefab && !currentRoom.cleared) {
+        const waveTag = waveInfo?.isTransition
+          ? `⚡ Invocazione Ondata ${waveInfo.current}/${waveInfo.total}...`
+          : `⚔️ Ondata ${waveInfo?.current || 1}/${waveInfo?.total || 2}`;
+        this.zoneText.textContent = `${zone.name} · ${currentRoom.arenaPrefab.name} (${waveTag})`;
+      } else if (currentRoom.arenaPrefab && currentRoom.cleared) {
+        this.zoneText.textContent = `${zone.name} · ${currentRoom.arenaPrefab.name} (✨ Purificata)`;
+      } else {
+        this.zoneText.textContent = zone.name;
+      }
+    }
 
     // On-Demand Level-Up Notification Button
     if (this.btnHudLevelup) {

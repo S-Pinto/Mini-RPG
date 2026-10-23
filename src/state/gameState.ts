@@ -6,7 +6,7 @@ import { Player } from '../entities/player.ts';
 import { Enemy } from '../entities/enemy.ts';
 import { dungeon, type DungeonRoom, WORLD_W, WORLD_H, DOOR_CX, DOOR_CY, TILE_SIZE } from '../world/dungeonGenerator.ts';
 import { ZONES, ZONE_ORDER } from '../world/zones.ts';
-import type { ClassId, EliteAffix, FeatUpgrade, Item, ZoneConfig } from '../types/game.ts';
+import type { ClassId, EliteAffix, EnemyType, FeatUpgrade, Item, ZoneConfig } from '../types/game.ts';
 import { generateItem, rollRandomRarity, RARITIES } from '../items/itemDatabase.ts';
 import { particles } from '../graphics/particles.ts';
 import { sound } from '../audio/soundEngine.ts';
@@ -16,6 +16,9 @@ import { modals } from '../ui/modals.ts';
 import { GEO, getLambert, getBasic, buildGrandPortalModel } from '../graphics/proceduralModels.ts';
 import { Ally } from '../entities/ally.ts';
 import { metaProgression } from './metaProgression.ts';
+import { physics } from '../physics/physicsEngine.ts';
+import { aiManager } from '../ai/aiManager.ts';
+import { postProcessing } from '../graphics/postProcessing.ts';
 
 export interface GroundLoot {
   mesh: THREE.Group;
@@ -121,6 +124,11 @@ export class GameState {
   public dynamicGroup = new THREE.Group();
   public roomGroup = new THREE.Group();
   public cameraShake = 0;
+  public currentWave = 1;
+  public totalWaves = 1;
+  public isWaveTransitionActive = false;
+  public waveSummonTimer = 0;
+  private pendingWaveSpawns: { x: number; y: number; type: EnemyType; isElite?: boolean; affix?: EliteAffix }[] = [];
   private nearShopCounter = false;
   private onTeleportPad = false;
 
@@ -197,6 +205,7 @@ export class GameState {
 
   public loadZone(zone: ZoneConfig): void {
     this.currentZone = zone;
+    postProcessing.setZoneAtmosphere(zone.id);
     // More rooms per level as requested: Act 1: 10 rooms, Act 2: 13 rooms, Act 3: 15 rooms, Act 4: 18 rooms
     const targetRooms = Math.round(8 + zone.actNumber * 2.5);
     this.rooms = dungeon.generateFloor(zone, targetRooms);
@@ -208,6 +217,12 @@ export class GameState {
     this.currentRoom = r;
     r.visited = true;
     r.seen = true;
+
+    this.currentWave = 1;
+    this.totalWaves = r.type === 'normal' ? 2 : 1;
+    this.isWaveTransitionActive = false;
+    this.waveSummonTimer = 0;
+    this.pendingWaveSpawns = [];
 
     if (r.waypointName && !r.waypointUnlocked) {
       r.waypointUnlocked = true;
@@ -237,11 +252,23 @@ export class GameState {
       this.dynamicGroup.add(ally.mesh);
     }
 
+    // Synchronize Rapier 3D static room colliders & YUKA steering obstacles
+    physics.loadRoomColliders(r);
+    aiManager.loadRoomObstacles(r);
+    physics.syncPlayerPosition(this.player.x, this.player.y);
+
+    if (r.cleared) {
+      physics.openDoors();
+    }
+
     // Spawn enemies if room was never spawned
     if (!r.cleared && !r.spawned) {
       r.spawned = true;
       this.spawnRoomEnemies(r);
     }
+
+    aiManager.syncEnemies(this.enemies, this.player);
+    physics.syncEnemies(this.enemies);
   }
 
   public openFastTravelMap(): void {
@@ -264,6 +291,7 @@ export class GameState {
 
     this.player.x = WORLD_W / 2;
     this.player.y = WORLD_H / 2;
+    physics.syncPlayerPosition(this.player.x, this.player.y);
     this.enterRoom(destRoom);
 
     particles.spawnShockwave(this.player.x, this.player.y, 4.0, 0x8a5cf6);
@@ -316,23 +344,21 @@ export class GameState {
     }
 
     if (r.type === 'normal') {
-      // More enemies per room (5 to 11 enemies based on act)
-      const enemyCount = 5 + Math.floor(Math.random() * 3) + this.currentZone.actNumber * 2;
+      const isEliteArena = Math.random() < 0.35;
+      const wave1Count = 3 + Math.floor(Math.random() * 2);
       const affixes: EliteAffix[] = ['vampiric', 'swift', 'toxic_aura', 'shielded'];
 
-      for (let i = 0; i < enemyCount; i++) {
+      const spawnPoints = r.arenaPrefab?.wave1Spawns || [];
+      for (let i = 0; i < wave1Count; i++) {
         const pool = this.currentZone.enemyPool;
         const eType = pool[Math.floor(Math.random() * pool.length)];
-
-        // Guaranteed free spot inside complex room shape
-        const spot = dungeon.findFreeSpot(r, this.player.x, this.player.y, 6.0);
-        const isElite = Math.random() < (0.22 + this.currentZone.actNumber * 0.08);
+        const sp = spawnPoints[i % spawnPoints.length] || dungeon.findFreeSpot(r, this.player.x, this.player.y, 5.0);
+        const isElite = isEliteArena && i === 0;
         const affix = isElite ? affixes[Math.floor(Math.random() * affixes.length)] : undefined;
-        const enemy = new Enemy(eType, spot.x, spot.y, actMult * (isElite ? 1.4 : 1.0), affix);
+        const enemy = new Enemy(eType, sp.x, sp.y, actMult * (isElite ? 1.4 : 1.0), affix);
         this.enemies.push(enemy);
         this.dynamicGroup.add(enemy.mesh);
 
-        // Display Elite floating badge
         if (isElite && affix) {
           const affixLabels: Record<EliteAffix, string> = {
             vampiric: '🩸 VAMPIRICO',
@@ -340,14 +366,29 @@ export class GameState {
             toxic_aura: '☣️ TOSSICO',
             shielded: '🛡️ CORAZZATO'
           };
-          particles.spawnFloatingText(spot.x, 2.2, spot.y, `ÉLITE ${affixLabels[affix]}`, '#f59e0b', true);
+          particles.spawnFloatingText(sp.x, 2.2, sp.y, `ÉLITE ${affixLabels[affix]}`, '#f59e0b', true);
         }
       }
+
+      // Arena encounter entrance announcement
+      const arenaTitle = r.arenaPrefab?.name || 'Arena di Battaglia';
+      particles.spawnFloatingText(this.player.x, 2.8, this.player.y, `⚔️ ${arenaTitle.toUpperCase()} · ONDATA 1/${this.totalWaves}`, '#ffd700', true, 'large');
+      sound.summonRift();
     }
   }
 
   public update(dt: number): void {
     if (this.state !== 'play' || !this.currentRoom) return;
+
+    // 1. Step Rapier 3D Physics Simulation at 60 FPS
+    physics.update(dt);
+
+    // 2. Synchronize YUKA Autonomous Agents & Steering Behaviors
+    aiManager.syncEnemies(this.enemies, this.player);
+    aiManager.update(dt);
+
+    // 3. Sync Dynamic Enemy Rigidbodies and Impulse Knockbacks
+    physics.syncEnemies(this.enemies);
 
     // Check player death
     if (this.player.hp <= 0) {
@@ -487,6 +528,30 @@ export class GameState {
             nexus.position.y = 0.85 + Math.sin(nowSec * 2.5) * 0.1;
           }
         }
+      } else if (pr.type === 'celestial_fountain') {
+        if (pr.mesh) {
+          const gem = pr.mesh.getObjectByName('celestial_fountain_gem');
+          const runes = pr.mesh.getObjectByName('celestial_fountain_runes');
+          const light = pr.mesh.getObjectByName('fountain_light') as THREE.PointLight | undefined;
+          if (gem) {
+            gem.rotation.y = nowSec * 1.6;
+            gem.position.y = 1.85 + Math.sin(nowSec * 2.5) * 0.12;
+          }
+          if (runes) {
+            runes.rotation.y = -nowSec * 1.0;
+          }
+          if (light) {
+            light.intensity = 1.9 + Math.sin(nowSec * 3.5) * 0.35;
+          }
+        }
+      } else if (pr.type === 'celestial_forge') {
+        if (pr.mesh) {
+          const hammer = pr.mesh.getObjectByName('celestial_forge_hammer');
+          if (hammer) {
+            hammer.position.y = 1.55 + Math.sin(nowSec * 2.2) * 0.08;
+            hammer.rotation.z = -0.35 + Math.sin(nowSec * 2.2) * 0.12;
+          }
+        }
       } else if (pr.type === 'rune_puzzle') {
         if (pr.mesh) {
           const glyph = pr.mesh.getObjectByName('rune_glyph');
@@ -615,17 +680,85 @@ export class GameState {
       }
     }
 
-    // Check Room Clearance
-    if (!this.currentRoom.cleared && this.currentRoom.spawned && this.enemies.length === 0) {
-      this.currentRoom.cleared = true;
-      sound.doorUnlock();
-      for (const bar of this.currentRoom.bars) {
-        bar.visible = false;
-      }
+    // Check Wave Advancement or Room Clearance
+    if (!this.currentRoom.cleared && this.currentRoom.spawned && this.enemies.length === 0 && !this.isWaveTransitionActive) {
+      if (this.currentWave < this.totalWaves) {
+        // Trigger Wave 2 (Reinforcements Summoning Sequence)
+        this.currentWave++;
+        this.isWaveTransitionActive = true;
+        this.waveSummonTimer = 1.35;
+        sound.summonRift();
 
-      // If boss room was cleared, spawn grand teleport portal gate!
-      if (this.currentRoom.type === 'boss') {
-        this.spawnBossTeleportPortal(WORLD_W / 2, WORLD_H * 0.4);
+        const wave2Count = 3 + Math.floor(Math.random() * 2) + Math.min(2, this.currentZone.actNumber);
+        const affixes: EliteAffix[] = ['vampiric', 'swift', 'toxic_aura', 'shielded'];
+        const wave2Spots = this.currentRoom.arenaPrefab?.wave2Spawns || [];
+
+        this.pendingWaveSpawns = [];
+        for (let i = 0; i < wave2Count; i++) {
+          const pool = this.currentZone.enemyPool;
+          const eType = pool[Math.floor(Math.random() * pool.length)];
+          const sp = wave2Spots[i % wave2Spots.length] || dungeon.findFreeSpot(this.currentRoom, this.player.x, this.player.y, 5.0);
+          const isElite = Math.random() < (0.28 + this.currentZone.actNumber * 0.1);
+          const affix = isElite ? affixes[Math.floor(Math.random() * affixes.length)] : undefined;
+          this.pendingWaveSpawns.push({ x: sp.x, y: sp.y, type: eType, isElite, affix });
+
+          // Ominous warning telegraph rift circle
+          telegraphs.createCircle(sp.x, sp.y, 2.2, 1.35, 0x8a5cf6, () => {});
+        }
+
+        particles.spawnFloatingText(this.player.x, 2.6, this.player.y, `⚡ INVOCAZIONE ONDATA ${this.currentWave}/${this.totalWaves}...`, '#c084fc', true, 'large');
+      } else {
+        // All waves cleared!
+        this.currentRoom.cleared = true;
+        sound.arenaClear();
+        physics.openDoors();
+        for (const bar of this.currentRoom.bars) {
+          bar.visible = false;
+        }
+
+        particles.spawnShockwave(WORLD_W / 2, WORLD_H / 2, 8.0, 0xffd700, 0.5);
+        particles.spawnBurst(this.player.x, 1.5, this.player.y, 35, 0xffd700, 8);
+        particles.spawnFloatingText(this.player.x, 2.8, this.player.y, '✨ ARENA PURIFICATA!', '#ffd700', true, 'large');
+
+        // If boss room was cleared, spawn grand teleport portal gate!
+        if (this.currentRoom.type === 'boss') {
+          this.spawnBossTeleportPortal(WORLD_W / 2, WORLD_H * 0.4);
+        }
+      }
+    }
+
+    // Process Wave Summoning Transition Countdown
+    if (this.isWaveTransitionActive) {
+      this.waveSummonTimer -= dt;
+      if (this.waveSummonTimer <= 0) {
+        this.isWaveTransitionActive = false;
+        const actMult = 1.0 + (this.currentZone.actNumber - 1) * 0.85;
+        sound.summonRift();
+        combat.addScreenShake(0.4);
+
+        for (const sp of this.pendingWaveSpawns) {
+          const enemy = new Enemy(sp.type, sp.x, sp.y, actMult * (sp.isElite ? 1.4 : 1.0), sp.affix);
+          this.enemies.push(enemy);
+          this.dynamicGroup.add(enemy.mesh);
+
+          particles.spawnShockwave(sp.x, sp.y, 3.2, 0x8a5cf6, 0.35);
+          particles.spawnBurst(sp.x, 1.2, sp.y, 25, 0xa78bfa, 6);
+
+          if (sp.isElite && sp.affix) {
+            const affixLabels: Record<EliteAffix, string> = {
+              vampiric: '🩸 VAMPIRICO',
+              swift: '⚡ RAPIDO',
+              toxic_aura: '☣️ TOSSICO',
+              shielded: '🛡️ CORAZZATO'
+            };
+            particles.spawnFloatingText(sp.x, 2.2, sp.y, `ÉLITE ${affixLabels[sp.affix]}`, '#f59e0b', true);
+          }
+        }
+
+        this.pendingWaveSpawns = [];
+        aiManager.syncEnemies(this.enemies, this.player);
+        physics.syncEnemies(this.enemies);
+        particles.spawnFloatingText(this.player.x, 2.8, this.player.y, `⚔️ ONDATA ${this.currentWave}/${this.totalWaves} INIZIATA!`, '#ffd700', true, 'large');
       }
     }
 
@@ -981,28 +1114,35 @@ export class GameState {
     if (!this.currentRoom || !this.currentRoom.cleared) return;
 
     const r = this.currentRoom;
+    const doorTriggerDepth = 2.4;
+    const doorWidthMargin = 2.4;
+
     // North Door
-    if (r.doors.n && this.player.y < 1.2 && Math.abs(this.player.x - DOOR_CX) < 1.8) {
-      this.player.y = WORLD_H - TILE_SIZE * 1.5;
+    if (r.doors.n && this.player.y <= doorTriggerDepth && Math.abs(this.player.x - DOOR_CX) <= doorWidthMargin) {
+      this.player.y = WORLD_H - TILE_SIZE * 1.6;
       this.player.x = DOOR_CX;
+      physics.syncPlayerPosition(this.player.x, this.player.y);
       this.enterRoom(r.doors.n);
     }
     // South Door
-    else if (r.doors.s && this.player.y > WORLD_H - 1.2 && Math.abs(this.player.x - DOOR_CX) < 1.8) {
-      this.player.y = TILE_SIZE * 1.5;
+    else if (r.doors.s && this.player.y >= WORLD_H - doorTriggerDepth && Math.abs(this.player.x - DOOR_CX) <= doorWidthMargin) {
+      this.player.y = TILE_SIZE * 1.6;
       this.player.x = DOOR_CX;
+      physics.syncPlayerPosition(this.player.x, this.player.y);
       this.enterRoom(r.doors.s);
     }
     // East Door
-    else if (r.doors.e && this.player.x > WORLD_W - 1.2 && Math.abs(this.player.y - DOOR_CY) < 1.8) {
-      this.player.x = TILE_SIZE * 1.5;
+    else if (r.doors.e && this.player.x >= WORLD_W - doorTriggerDepth && Math.abs(this.player.y - DOOR_CY) <= doorWidthMargin) {
+      this.player.x = TILE_SIZE * 1.6;
       this.player.y = DOOR_CY;
+      physics.syncPlayerPosition(this.player.x, this.player.y);
       this.enterRoom(r.doors.e);
     }
     // West Door
-    else if (r.doors.w && this.player.x < 1.2 && Math.abs(this.player.y - DOOR_CY) < 1.8) {
-      this.player.x = WORLD_W - TILE_SIZE * 1.5;
+    else if (r.doors.w && this.player.x <= doorTriggerDepth && Math.abs(this.player.y - DOOR_CY) <= doorWidthMargin) {
+      this.player.x = WORLD_W - TILE_SIZE * 1.6;
       this.player.y = DOOR_CY;
+      physics.syncPlayerPosition(this.player.x, this.player.y);
       this.enterRoom(r.doors.w);
     }
   }
@@ -1059,6 +1199,40 @@ export class GameState {
           particles.spawnShockwave(p.x, p.y, 4.5, 0x9333ea);
           modals.showDarkPacts(this.player, (pact) => {
             particles.spawnFloatingText(this.player.x, 2.8, this.player.y, `PATTO SIGILLATO: ${pact.name}!`, '#c084fc', true);
+          });
+        }
+      } else if (p.type === 'celestial_fountain') {
+        if (dist < 2.2) {
+          if (!p.opened) {
+            p.opened = true;
+            sound.heal();
+            sound.levelUp();
+            particles.spawnShockwave(p.x, p.y, 5.0, 0x00f0ff, 0.5);
+            particles.spawnBurst(p.x, 1.2, p.y, 45, 0x38bdf8, 8);
+
+            this.player.heal(this.player.maxHp);
+            this.player.potions = 3;
+            this.player.bonusShield = Math.max(this.player.bonusShield || 0, 45);
+
+            particles.spawnFloatingText(
+              p.x,
+              2.8,
+              p.y,
+              '✨ FONTE DELLA RINASCITA: CURA TOTALE, POZIONI MAX & +45 SCUDO! ✨',
+              '#38bdf8',
+              true,
+              'large'
+            );
+          } else {
+            particles.spawnFloatingText(p.x, 2.2, p.y, 'La Fonte ha già donato la sua grazia.', '#94a3b8');
+          }
+        }
+      } else if (p.type === 'celestial_forge') {
+        if (dist < 2.2) {
+          sound.heavyChop();
+          particles.spawnBurst(p.x, 1.0, p.y, 25, 0xf59e0b, 6);
+          modals.showCelestialForge(this.player, () => {
+            particles.spawnBurst(this.player.x, 1.2, this.player.y, 20, 0x38bdf8, 5);
           });
         }
       } else if (dist < 1.8) {

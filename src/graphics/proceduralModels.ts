@@ -289,21 +289,25 @@ export function buildHumanoid(
     const isMoving = speed > 0.1;
 
     if (isDashing) {
-      // Dynamic evasive dodge roll / slide pose
-      torso.rotation.x = 0.52;
-      torso.position.y = hipY - 0.16;
-      head.rotation.x = -0.35;
-      armR.rotation.x = 0.65;
-      armR.rotation.z = 0.25;
-      armL.rotation.x = 0.65;
-      armL.rotation.z = -0.25;
-      forearmR.rotation.x = 0.5;
-      forearmL.rotation.x = 0.5;
-      legL.rotation.x = -0.7;
-      legR.rotation.x = 0.7;
-      shinL.rotation.x = 0.6;
-      shinR.rotation.x = 0.2;
-      body.position.y = -0.05;
+      // Dynamic Hades-style low aerodynamic slide & dash
+      torso.rotation.x = 0.65;
+      torso.rotation.y = 0;
+      torso.rotation.z = 0;
+      torso.position.y = hipY - 0.22;
+      head.rotation.x = -0.45;
+      armR.rotation.x = 0.95;
+      armR.rotation.y = -0.15;
+      armR.rotation.z = 0.35;
+      armL.rotation.x = 0.95;
+      armL.rotation.y = 0.15;
+      armL.rotation.z = -0.35;
+      forearmR.rotation.x = 0.6;
+      forearmL.rotation.x = 0.6;
+      legL.rotation.x = -0.95;
+      legR.rotation.x = 0.85;
+      shinL.rotation.x = 0.8;
+      shinR.rotation.x = 0.25;
+      body.position.y = -0.12;
       return;
     }
 
@@ -695,33 +699,58 @@ export function buildHumanoid(
       }
 
       if (isMoving) {
-        const freq = t * 10;
+        const freq = t * 11;
         const stride = Math.sin(freq);
-        legL.rotation.x = stride * 0.75;
-        legR.rotation.x = -stride * 0.75;
-        shinL.rotation.x = Math.max(0, -stride) * 0.55;
-        shinR.rotation.x = Math.max(0, stride) * 0.55;
+        const doubleBounce = Math.abs(Math.sin(freq));
+
+        // Dynamic forward athletic sprint lean
+        torso.rotation.x = 0.22;
+        torso.rotation.y = -stride * 0.12;
+        torso.rotation.z = stride * 0.05;
+        head.rotation.x = -0.15;
+        head.rotation.y = stride * 0.06;
+
+        legL.rotation.x = stride * 0.85;
+        legR.rotation.x = -stride * 0.85;
+        shinL.rotation.x = Math.max(0, -stride) * 0.85;
+        shinR.rotation.x = Math.max(0, stride) * 0.85;
+
         if (rig.isWizard) {
-          armR.rotation.x = -0.28 + stride * 0.08;
-          armL.rotation.x = -0.18 - stride * 0.45;
+          armR.rotation.x = -0.32 + stride * 0.1;
+          armR.rotation.z = -0.12;
+          forearmR.rotation.x = 0.65;
+          armL.rotation.x = -0.22 - stride * 0.55;
+          armL.rotation.z = -0.28;
+          forearmL.rotation.x = 0.45;
         } else {
-          armL.rotation.x = -stride * 0.55;
-          armR.rotation.x = stride * 0.55;
+          armL.rotation.x = -stride * 0.65;
+          armR.rotation.x = stride * 0.65;
+          forearmL.rotation.x = 0.25 + Math.max(0, stride) * 0.4;
+          forearmR.rotation.x = 0.25 + Math.max(0, -stride) * 0.4;
         }
-        body.position.y = Math.abs(Math.sin(freq)) * 0.06;
-        torso.rotation.z = stride * 0.04;
+
+        body.position.y = doubleBounce * 0.075 - 0.02;
       } else {
-        const breathe = Math.sin(t * 2.2) * 0.02;
-        body.position.y = breathe;
+        // Deep rhythmic breathing with natural chest rise & idle sway
+        const breathe = Math.sin(t * 2.5);
+        body.position.y = breathe * 0.025;
+        torso.rotation.x = 0.04 + breathe * 0.015;
+        torso.rotation.y *= 0.8;
+        torso.rotation.z = breathe * 0.03;
+        head.rotation.x = -breathe * 0.02;
+        head.rotation.y *= 0.8;
+
         legL.rotation.x *= 0.85;
         legR.rotation.x *= 0.85;
         shinL.rotation.x *= 0.85;
         shinR.rotation.x *= 0.85;
+
         if (!rig.isWizard) {
-          armL.rotation.x = -0.12;
-          armR.rotation.x = -0.12;
+          armL.rotation.x = -0.15 + breathe * 0.03;
+          armR.rotation.x = -0.15 + breathe * 0.03;
+          armL.rotation.z = -0.1;
+          armR.rotation.z = 0.1;
         }
-        torso.rotation.z = breathe * 0.2;
       }
     }
   };
@@ -3431,6 +3460,136 @@ export function buildPropModel(type: DestructibleProp['type'], prop?: Partial<De
     barrierGroup.add(barrierLight);
 
     root.add(base, lid, bandL, bandR, lock, barrierGroup);
+  } else if (type === 'celestial_fountain') {
+    // Fonte della Rinascita Celestiale: Tiered Sacred Cyan Marble Basin with Hovering Star Gem
+    const marbleMat = getLambert(0xe0f2fe, 0x1e293b);
+    const goldTrimMat = getLambert(0xfcd34d, 0x451a03);
+
+    // Tier 1: Wide octagonal lower plinth
+    const plinth1 = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.7, 0.16, 8), marbleMat);
+    plinth1.position.set(0, 0.08, 0);
+
+    // Gold trim band between tiers
+    const goldRing = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.06, 8), goldTrimMat);
+    goldRing.position.set(0, 0.18, 0);
+
+    // Tier 2: Stepped marble base
+    const plinth2 = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.45, 0.18, 8), marbleMat);
+    plinth2.position.set(0, 0.28, 0);
+
+    // Main Fountain Basin
+    const basin = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 0.75, 0.65, 16), marbleMat);
+    basin.position.set(0, 0.65, 0);
+
+    // Basin Outer Lip Trim
+    const basinLip = new THREE.Mesh(GEO.torus, goldTrimMat);
+    basinLip.scale.set(1.22, 1.22, 0.08);
+    basinLip.rotation.x = Math.PI / 2;
+    basinLip.position.set(0, 0.98, 0);
+
+    // Luminous Ethereal Water Pool
+    const waterPool = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.1, 1.1, 0.05, 16),
+      getBasic(0x38bdf8, 0.85, true)
+    );
+    waterPool.position.set(0, 0.92, 0);
+
+    // Central sculpted water spire
+    const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, 0.7, 8), marbleMat);
+    spire.position.set(0, 1.25, 0);
+
+    // Levitating Celestial Star Prism (Hovering over the sacred water)
+    const starGem = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.32, 0),
+      getBasic(0x67e8f9, 0.95, true)
+    );
+    starGem.name = 'celestial_fountain_gem';
+    starGem.position.set(0, 1.85, 0);
+
+    // 4 Orbiting Celestial Runes
+    const runeGroup = new THREE.Group();
+    runeGroup.name = 'celestial_fountain_runes';
+    for (let i = 0; i < 4; i++) {
+      const angle = (i * Math.PI * 2) / 4;
+      const rune = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.12, 0),
+        getBasic(0x38bdf8, 0.85, true)
+      );
+      rune.scale.set(0.6, 1.4, 0.6);
+      rune.position.set(Math.cos(angle) * 0.9, 1.4, Math.sin(angle) * 0.9);
+      runeGroup.add(rune);
+    }
+
+    // Sacred Light Beacon & Glow
+    const fountainLight = new THREE.PointLight(0x00f0ff, 1.9, 7.5, 2.0);
+    fountainLight.name = 'fountain_light';
+    fountainLight.position.set(0, 1.6, 0);
+
+    root.add(plinth1, goldRing, plinth2, basin, basinLip, waterPool, spire, starGem, runeGroup, fountainLight);
+  } else if (type === 'celestial_forge') {
+    // Forgia Runica di Raffinamento: Obsidian Anvil, Golden Runes & Levitating Smith Hammer
+    const stoneMat = getLambert(0x1e2029, 0x0f1118);
+    const steelMat = getLambert(0x94a3b8, 0x1e293b);
+    const goldTrimMat = getLambert(0xf59e0b, 0x78350f);
+
+    // Stone anvil pedestal dais
+    const baseBlock = new THREE.Mesh(GEO.box, stoneMat);
+    baseBlock.scale.set(1.3, 0.35, 1.1);
+    baseBlock.position.set(0, 0.175, 0);
+
+    // Carved runic plinth strip
+    const runeBand = new THREE.Mesh(GEO.box, getBasic(0x38bdf8, 0.8, true));
+    runeBand.scale.set(1.32, 0.08, 1.12);
+    runeBand.position.set(0, 0.32, 0);
+
+    // Heavy Anvil Body
+    const anvilBody = new THREE.Mesh(GEO.box, steelMat);
+    anvilBody.scale.set(0.9, 0.55, 0.6);
+    anvilBody.position.set(0, 0.65, 0);
+
+    // Anvil Horn (protruding conical / wedge nose)
+    const horn = new THREE.Mesh(GEO.cone, steelMat);
+    horn.scale.set(0.24, 0.5, 0.24);
+    horn.rotation.z = -Math.PI / 2;
+    horn.position.set(0.65, 0.82, 0);
+
+    // Anvil Face Plate
+    const facePlate = new THREE.Mesh(GEO.box, goldTrimMat);
+    facePlate.scale.set(0.85, 0.08, 0.55);
+    facePlate.position.set(-0.05, 0.94, 0);
+
+    // Heated glowing celestial ingot on anvil face
+    const ingot = new THREE.Mesh(GEO.box, getBasic(0xfbbf24, 0.95, true));
+    ingot.scale.set(0.35, 0.12, 0.2);
+    ingot.position.set(-0.05, 1.04, 0);
+
+    // Hovering Ethereal Smith Hammer
+    const hammerGroup = new THREE.Group();
+    hammerGroup.name = 'celestial_forge_hammer';
+    hammerGroup.position.set(0.1, 1.55, 0);
+    hammerGroup.rotation.z = -0.35;
+
+    const hammerHandle = new THREE.Mesh(GEO.cyl, getLambert(0x78350f));
+    hammerHandle.scale.set(0.06, 0.75, 0.06);
+    hammerHandle.position.set(0, 0, 0);
+
+    const hammerHead = new THREE.Mesh(GEO.box, getLambert(0x38bdf8, 0x0284c7));
+    hammerHead.scale.set(0.26, 0.22, 0.4);
+    hammerHead.position.set(0, 0.35, 0);
+
+    const hammerCore = new THREE.Mesh(new THREE.OctahedronGeometry(0.14, 0), getBasic(0x67e8f9, 0.95, true));
+    hammerCore.position.set(0, 0.35, 0);
+
+    hammerGroup.add(hammerHandle, hammerHead, hammerCore);
+
+    // Dual Forge Light: Cyan celestial enchantment + warm amber forge glow
+    const forgeCyanLight = new THREE.PointLight(0x38bdf8, 1.4, 6.5, 2.0);
+    forgeCyanLight.position.set(0, 1.4, 0);
+
+    const forgeAmberLight = new THREE.PointLight(0xf59e0b, 1.2, 5.0, 2.0);
+    forgeAmberLight.position.set(-0.05, 1.1, 0);
+
+    root.add(baseBlock, runeBand, anvilBody, horn, facePlate, ingot, hammerGroup, forgeCyanLight, forgeAmberLight);
   }
   return { root };
 }

@@ -10,6 +10,8 @@ import { combat } from './combat/combatSystem.ts';
 import { hud } from './ui/hud.ts';
 import { modals } from './ui/modals.ts';
 import { WORLD_W, WORLD_H } from './world/dungeonGenerator.ts';
+import { physics } from './physics/physicsEngine.ts';
+import { postProcessing } from './graphics/postProcessing.ts';
 
 // 1. Initialize Three.js Renderer & Camera
 const canvas = document.getElementById('stage-canvas') as HTMLCanvasElement;
@@ -89,6 +91,11 @@ function resizeCamera(): void {
   const dv = ((WORLD_H + 5) / 2 * Math.sin(PITCH)) / tanHalf;
 
   camState.d = camState.isPortrait ? dh : Math.max(dh, dv) * 1.05;
+  try {
+    postProcessing.setSize(w, h);
+  } catch (err) {
+    console.warn('[PostProcessing] setSize error:', err);
+  }
 }
 
 window.addEventListener('resize', resizeCamera);
@@ -101,11 +108,23 @@ particles.init(textContainer, camera);
 hud.init();
 modals.init();
 input.init(canvas, camera);
+try {
+  postProcessing.init(renderer, gameState.scene, camera, window.innerWidth, window.innerHeight);
+} catch (err) {
+  console.warn('[PostProcessing] init fallback to standard render:', err);
+}
 gameState.init(gameState.scene);
+physics.init().then(() => {
+  if (gameState.currentRoom) {
+    physics.loadRoomColliders(gameState.currentRoom);
+    physics.syncPlayerPosition(gameState.player.x, gameState.player.y);
+  }
+});
 
 // Connect UI Modal callbacks
 modals.onClassSelected = (classId, subIndex) => {
   gameState.startNewRun(classId, subIndex);
+  postProcessing.setZoneAtmosphere(gameState.currentZone.id);
 };
 
 modals.onFeatChosen = (feat) => {
@@ -336,7 +355,12 @@ function gameLoop(now: number): void {
       gameState.currentRoom,
       gameState.rooms,
       gameState.currentZone,
-      gameState.enemies
+      gameState.enemies,
+      {
+        current: gameState.currentWave,
+        total: gameState.totalWaves,
+        isTransition: gameState.isWaveTransitionActive
+      }
     );
   }
 
@@ -384,12 +408,21 @@ function gameLoop(now: number): void {
   // Update particles and floating numbers
   particles.update(dt, window.innerWidth, window.innerHeight);
 
-  // Render WebGL Scene
-  renderer.render(gameState.scene, camera);
+  // Render WebGL Scene with HDR Bloom and Chromatic Impact Aberration
+  try {
+    postProcessing.render(dt, combat.shakeTrauma);
+  } catch (err) {
+    console.warn('[Render] Falling back to direct renderer:', err);
+    renderer.render(gameState.scene, camera);
+  }
 
   requestAnimationFrame(gameLoop);
 }
 
 // 5. Start Game: Show Intro / Main Menu first
+try {
+  modals.showIntro();
+} catch (err) {
+  console.error('[Modals] Error showing intro menu:', err);
+}
 requestAnimationFrame(gameLoop);
-modals.showIntro();
